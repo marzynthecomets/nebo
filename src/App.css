@@ -1,0 +1,181 @@
+/*
+ * ============================================================
+ * NEBO — Styles
+ * ============================================================
+ * 
+ * Hey Mars! Here's how the CSS works:
+ * 
+ * The .nebo-container is like a picture frame.
+ * Everything inside it uses position: absolute, which means
+ * "place me at exact coordinates inside the frame."
+ * 
+ * z-index controls the stacking order.
+ * Higher number = closer to the viewer.
+ * Think of it like layers in Photoshop — you already
+ * know this concept from design!
+ * ============================================================
+ */
+
+/* ---- Reset & base ---- */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background: #000;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+/* ---- The main frame that holds all layers ---- */
+.nebo-container {
+  position: relative;
+  width: calc(100vh * (1215 / 2160));
+  height: 100vh;
+  max-width: 100vw;
+  margin: 0 auto;
+  overflow: hidden;
+  border-radius: 16px;
+  background: #000;
+  font-family: 'Courier New', monospace;
+}
+
+/* ---- Layer 1: Animated sky gradient ---- */
+.sky-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    135deg,
+    #0a0025,
+    #1a0040,
+    #000a30,
+    #0d0035,
+    #05001a
+  );
+  background-size: 400% 400%;
+  animation: skyShift 20s ease infinite;
+  z-index: 1;
+}
+
+/* Stars that twinkle over the sky */
+.stars {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 50%;
+  z-index: 2;
+}
+
+.star {
+  position: absolute;
+  border-radius: 50%;
+  background-color: #fff;
+  animation: twinkle 3s ease-in-out infinite;
+}
+
+/* ---- Full-size layers (backwall, fronthull, porthole, interface) ---- */
+.full-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 3;
+  pointer-events: none;
+}
+
+/* ---- Nebo — positioned in the porthole area ---- */
+/*
+ * Mars: you'll probably need to tweak the top/left/width
+ * values to get Nebo perfectly centered in the porthole.
+ * Change the numbers, save, and the browser updates live!
+ */
+.nebo-layer {
+  position: absolute;
+  top: 27%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 28%;
+  height: auto;
+  z-index: 4;
+  animation: neboBob 4s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* ---- Dialogue area — sits on top of the interface panel ---- */
+/*
+ * Mars: same deal — tweak bottom/left/right/height
+ * to align this with the dark screen area on your
+ * interface.png. Every export is slightly different
+ * so these are starting guesses.
+ */
+.dialogue-area {
+  position: absolute;
+  bottom: 8%;
+  left: 12%;
+  right: 12%;
+  height: 25%;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px 20px;
+  overflow-y: auto;
+}
+
+/* Nebo's alien text — glowing green */
+.nebo-text {
+  color: #b4ff96;
+  font-size: 14px;
+  font-style: italic;
+  line-height: 1.4;
+  letter-spacing: 1px;
+  animation: textGlow 3s ease-in-out infinite;
+}
+
+/* Thoth's English translation */
+.thoth-text {
+  color: #BD96FA;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* ============================================================
+ * ANIMATIONS
+ * ============================================================ */
+
+/* Sky color slowly shifts */
+@keyframes skyShift {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* Stars fade in and out */
+@keyframes twinkle {
+  0%, 100% { opacity: 0.2; transform: scale(1); }
+  50%      { opacity: 1;   transform: scale(1.4); }
+}
+
+/* Nebo gently floats up and down */
+@keyframes neboBob {
+  0%, 100% { transform: translate(-50%, -50%) translateY(0px); }
+  50%      { transform: translate(-50%, -50%) translateY(-6px); }
+}
+
+/* Nebo's text has a subtle glow */
+@keyframes textGlow {
+  0%, 100% { text-shadow: 0 0 8px rgba(180, 255, 150, 0.4); }
+  50%      { text-shadow: 0 0 16px rgba(180, 255, 150, 0.8); }
+}
