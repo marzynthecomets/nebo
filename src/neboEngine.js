@@ -1,18 +1,29 @@
 /*
  * ============================================================
- * NEBO ENGINE — The Brain
+ * NEBO ENGINE v2 — The Brain (Streamlined)
  * ============================================================
  *
- * Mars! This is all the conversation logic from your Lambda,
- * ported to JavaScript so it runs right in the browser.
+ * Mars! This is the streamlined conversation flow from your
+ * Nebo.md design doc. Way tighter — kids get to the scanner
+ * in ~4 exchanges instead of 8.
  *
- * Same translator, same script, same blocklist, same stages.
- * Think of it like moving Nebo's brain from the server
- * into the ship itself. No radio needed — he thinks locally now.
+ * NEW in v2:
+ * - Thoth emoticons change with the conversation mood
+ * - scanCount so rescanning gives a different star each time
+ * - Cleaner stage flow matching your original design
  *
- * This file exports ONE main function: processMessage(input, state)
- * You give it what the kid said + where we are in the conversation,
- * and it gives you back Nebo's response + the new state.
+ * STAGE MAP:
+ *   0 → Kid says hi (greeting)
+ *   1 → Kid enters name
+ *   2 → "Can you help?" (yes/no)
+ *       → no → "Can you tell us where we landed?" (yes/no)
+ *   3 → City picker (state/city dropdowns OR skip)
+ *   4 → Scan result displayed
+ *   5 → "Scan again?" (yes/no)
+ *
+ * BAIL-OUT STAGES (dead ends from "no" responses):
+ *   90 → Said no to helping AND no to telling location
+ *   91 → Conversation ended gracefully
  * ============================================================
  */
 
@@ -74,153 +85,126 @@ function toNebo(word) {
     if (!isBad(result)) break;
   }
 
-  // Preserve capitalization
   if (word[0] === word[0].toUpperCase() && word[0] !== word[0].toLowerCase()) {
     result = result[0].toUpperCase() + result.slice(1);
   }
 
-  // Occasional flair
   result += pick(FLAIR, h >> 2);
 
   return result;
 }
 
 // ============================================================
-// Star Database
+// Star Database — curated facts for the demo
+// AstronomyAPI gives us the chart image; these give us
+// kid-friendly facts for the "Learn about these stars" overlay.
 // ============================================================
 
 const STAR_DATABASE = [
   {
     name: "Sirius",
+    constellation: "cma",
     fact: "Sirius is the brightest star in the night sky! It's actually two stars orbiting each other, and it's only 8.6 light-years away from Earth.",
   },
   {
     name: "Vega",
+    constellation: "lyr",
     fact: "Vega is one of the brightest stars you can see! It's about 25 light-years away, and thousands of years ago, it used to be Earth's North Star.",
   },
   {
     name: "Arcturus",
+    constellation: "boo",
     fact: "Arcturus is a red giant star — that means it's old and very big! It shines with an orange glow and is about 37 light-years from Earth.",
   },
   {
     name: "Betelgeuse",
+    constellation: "ori",
     fact: "Betelgeuse is a supergiant star in the constellation Orion. It's so big that if you put it where our Sun is, it would swallow up Mars! One day it might explode into a supernova.",
   },
   {
     name: "Polaris",
+    constellation: "umi",
     fact: "Polaris is the North Star! Travelers have used it for hundreds of years to find their way. It sits almost exactly above Earth's North Pole.",
   },
   {
     name: "Rigel",
+    constellation: "ori",
     fact: "Rigel is a blue supergiant in the constellation Orion. It's incredibly hot and shines about 120,000 times brighter than our Sun!",
   },
   {
     name: "Aldebaran",
+    constellation: "tau",
     fact: "Aldebaran is an orange giant star that looks like the fiery eye of Taurus the Bull! It's about 65 light-years away from us.",
   },
   {
     name: "Capella",
+    constellation: "aur",
     fact: "Capella is actually four stars that look like one bright point of light! It's one of the brightest things you can see in the winter sky.",
   },
   {
     name: "Procyon",
+    constellation: "cmi",
     fact: "Procyon means 'before the dog' because it rises just before Sirius, the Dog Star! It's one of our closest stellar neighbors at only 11 light-years away.",
   },
   {
     name: "Deneb",
+    constellation: "cyg",
     fact: "Deneb is so far away — about 2,600 light-years — that the light you see from it left the star before the pyramids were built! It's one of the most luminous stars we know.",
   },
 ];
 
-function getStarForCity(city) {
-  const h = hashStr(city.toLowerCase());
+// Use scanCount to give a different star each rescan
+export function getStarForCity(city, scanCount = 0) {
+  const h = hashStr(city.toLowerCase() + String(scanCount));
   return STAR_DATABASE[h % STAR_DATABASE.length];
 }
 
+// Get 3-4 stars for the "Learn about these stars" overlay
+export function getStarsForCity(city, scanCount = 0) {
+  const stars = [];
+  const used = new Set();
+  for (let i = 0; i < 4; i++) {
+    const h = hashStr(city.toLowerCase() + String(scanCount) + String(i));
+    const idx = h % STAR_DATABASE.length;
+    if (!used.has(idx)) {
+      used.add(idx);
+      stars.push(STAR_DATABASE[idx]);
+    }
+  }
+  // Ensure at least 3
+  if (stars.length < 3) {
+    for (let j = 0; j < STAR_DATABASE.length && stars.length < 3; j++) {
+      if (!used.has(j)) {
+        used.add(j);
+        stars.push(STAR_DATABASE[j]);
+      }
+    }
+  }
+  return stars;
+}
+
 function isDaytime() {
-  const now = new Date();
-  const hour = now.getHours(); // Uses the kid's local time — way better than UTC guessing!
+  const hour = new Date().getHours();
   return hour >= 7 && hour <= 19;
 }
 
 // ============================================================
-// Script — all the conversation lines
+// Thoth Emoticons
 // ============================================================
 
-const SCRIPT = {
-  0: {
-    any: {
-      nebo: "Uub… mee ba pfuu?",
-      thoth: "Hello. I'm the ship's computer, Thoth. That's Nebo. What's your name?",
-    },
-  },
-  // Stage 1: name entry — handled by the processMessage logic
-  2: {
-    yes: {
-      nebo: "Noowoo!",
-      thoth: "That's good to hear. We're lost on Earth. We crashed here when a comet hit our ship. Did you see the comet?",
-    },
-    no: {
-      nebo: "Nib otz~! Plaabpfaab~!",
-      thoth: "Oh no. We were hoping to meet a nice human since we crashed here on Earth. A comet hit our ship. Did you see the comet?",
-    },
-  },
-  3: {
-    yes: {
-      nebo: "Pfuu nop?! Wubru~ nop uub brobplob uubbuub?",
-      thoth: "Nebo wants to know what it looked like. He's an astronomer, which means he studies the stars. But he didn't see the comet coming. Do you look at the stars?",
-    },
-    no: {
-      nebo: "Uub ub wii pleepfee! Wii pleepfee bruu mobnob~.",
-      thoth: "Nebo says it was very scary and bright. He's an astronomer, which means he studies the stars. But he didn't see the comet coming. Do you look at the stars?",
-    },
-  },
-  4: {
-    yes: {
-      nebo: "Na pliibpfiib pubuu a popbop~. Bipi brutz boouu~ iiblii a popbop~ mimnim~ bluup?",
-      thoth: "Nebo loves star-watching. He always wants to learn more about the stars. Do you want to learn more about the stars with him?",
-    },
-    no: {
-      nebo: "Na pliibpfiib pubuu a popbop~. Bipi brutz boouu~ iiblii a popbop~ mimnim~ bluup?",
-      thoth: "Nebo loves star-watching. He always wants to learn more about the stars. Do you want to learn more about the stars with him?",
-    },
-  },
-  5: {
-    yes: {
-      nebo: "Pfa! Wii blaaaabii~!",
-      thoth: "Nebo's happy to hear that. Where are you? Type your city name so Nebo can scan the sky above you!",
-    },
-    no: {
-      nebo: "Naa~…",
-      thoth: "Well, we're always here if you change your mind. We need to learn more about the stars if we are ever going to complete our mission and return home.",
-    },
-  },
-  8: {
-    yes: {
-      nebo: "Miinii~!",
-      thoth: "Scanning the sky again...",
-    },
-    no: {
-      nebo: "Naa~…",
-      thoth: "That's okay! The stars will always be here. Come back anytime you want to explore.",
-    },
-  },
-};
-
-const FALLBACK_RESPONSES = {
-  0: { nebo: "…?", thoth: "Nebo's a little confused. Try saying hello!" },
-  1: { nebo: "…?", thoth: "Nebo wants to know your name! Just type it in." },
-  2: { nebo: "…?", thoth: "Nebo didn't quite catch that. Are you a nice human? You can say yes or no." },
-  3: { nebo: "…?", thoth: "Nebo's still wondering — did you see the comet? You can say yes or no." },
-  4: { nebo: "…?", thoth: "Nebo wants to know — do you look at the stars? You can say yes or no." },
-  5: { nebo: "…?", thoth: "Do you want to learn more about the stars with Nebo? You can say yes or no." },
-  6: { nebo: "…?", thoth: "Type your city name so Nebo can scan the sky above you!" },
-  7: { nebo: "…?", thoth: "Nebo's scanner is warming up. Hang tight!" },
-  8: { nebo: "…?", thoth: "Want to scan for another star? You can say yes or no." },
+export const EMOTICONS = {
+  neutral:  "o_0",
+  worried:  "~_~",
+  sad:      ">_<",
+  happy:    "◕ヮ◕",
+  chill:    "´ー｀",
+  blank:    "ー_ー",
+  excited:  "^O^",
+  scanning: "◎_◎",
 };
 
 // ============================================================
-// Intent detection — figuring out what the kid meant
+// Intent detection
 // ============================================================
 
 const YES_WORDS = [
@@ -244,93 +228,75 @@ const GREETING_WORDS = [
 function detectIntent(input) {
   const lower = input.toLowerCase().trim();
 
-  // Check greetings first
   if (GREETING_WORDS.some((g) => lower === g || lower.startsWith(g + " ") || lower.startsWith(g + "!"))) {
     return "greeting";
   }
-
-  // Check yes
   if (YES_WORDS.some((y) => lower === y || lower.startsWith(y + " ") || lower.startsWith(y + "!"))) {
     return "yes";
   }
-
-  // Check no
   if (NO_WORDS.some((n) => lower === n || lower.startsWith(n + " ") || lower.startsWith(n + "!"))) {
     return "no";
   }
-
-  // Anything else could be a name or city
   return "other";
 }
 
 // ============================================================
-// Build scan response
+// Fallback responses
 // ============================================================
 
-function buildScanResponse(city, kidName) {
-  const star = getStarForCity(city);
-  const neboStar = toNebo(star.name);
-
-  const timeMsg = isDaytime()
-    ? "Even though it's daytime, the stars are still shining bright above us. It's just hard to see them without a special scanner!"
-    : "Even if you can't see them all clearly, the stars are shining bright above us!";
-
-  const nameGreeting = kidName ? `Look, ${kidName}! ` : "";
-
-  return {
-    messages: [
-      { nebo: "Miinii~!", thoth: `Scanning the sky above ${city}... ${timeMsg}` },
-      { nebo: `${neboStar}!`, thoth: `${nameGreeting}Right now above you, the brightest star is ${star.name}. ${star.fact}` },
-      { nebo: "Wii paapmiipniip~!", thoth: "Want to scan for another star?" },
-    ],
-    starName: star.name,
-  };
-}
+const FALLBACK_RESPONSES = {
+  0: { nebo: "…?", thoth: "Nebo's a little confused. Try saying hello!", emoticon: EMOTICONS.neutral },
+  1: { nebo: "…?", thoth: "Nebo wants to know your name! Just type it in.", emoticon: EMOTICONS.worried },
+  2: { nebo: "…?", thoth: "Can you help us? You can say yes or no.", emoticon: EMOTICONS.worried },
+  "2no": { nebo: "…?", thoth: "Can you at least tell us where we landed? Yes or no?", emoticon: EMOTICONS.sad },
+  3: { nebo: "…?", thoth: "Pick your state and city so Nebo can scan the sky above you!", emoticon: EMOTICONS.worried },
+  5: { nebo: "…?", thoth: "Want to scan for another star? You can say yes or no.", emoticon: EMOTICONS.happy },
+};
 
 // ============================================================
-// Main processor — THE function your React app calls
+// Main processor
 // ============================================================
 /*
- * Mars! This is the heart of it all.
- *
  * state = {
- *   stage: 0,        // where we are in the conversation
- *   kidName: "",      // the kid's name (once they tell us)
- *   city: "",         // the kid's city (once they tell us)
+ *   stage: 0,
+ *   kidName: "",
+ *   city: "",
+ *   scanCount: 0,
+ *   subStage: null,   // for branching within a stage
  * }
  *
  * Returns: {
- *   messages: [{ nebo: "...", thoth: "..." }, ...],
- *   newState: { stage, kidName, city },
- *   expectingInput: "yesno" | "text" | "city" | null,
+ *   messages: [{ nebo, thoth, emoticon }, ...],
+ *   newState: { stage, kidName, city, scanCount, subStage },
+ *   expectingInput: "text" | "yesno" | "city" | null,
+ *   showCityPicker: true/false,
+ *   showScanResult: true/false,
  * }
  */
 
 export function processMessage(input, state) {
-  const { stage, kidName, city } = state;
+  const { stage, kidName, city, scanCount = 0, subStage } = state;
   const intent = detectIntent(input);
 
-  // ---- Stage 0: waiting for a greeting ----
+  // ---- Stage 0: waiting for greeting ----
   if (stage === 0) {
-    if (intent === "greeting" || intent === "other") {
-      return {
-        messages: [SCRIPT[0].any],
-        newState: { ...state, stage: 1 },
-        expectingInput: "text",
-      };
-    }
     return {
-      messages: [FALLBACK_RESPONSES[0]],
-      newState: state,
+      messages: [
+        {
+          nebo: "Uub… mee ba pfuu?",
+          thoth: "Hello? Who's there? Who are you?",
+          emoticon: EMOTICONS.neutral,
+        },
+      ],
+      newState: { ...state, stage: 1 },
       expectingInput: "text",
     };
   }
 
-  // ---- Stage 1: waiting for the kid's name ----
+  // ---- Stage 1: name entry ----
   if (stage === 1) {
-    // Whatever they type is their name
-    let name = input.replace(/[^a-zA-Z\s]/g, "").trim();
-    name = name ? name.split(" ")[0] : ""; // Take first word only
+    let name = input.replace(/[^a-zA-Z\s'-]/g, "").trim();
+    name = name ? name.split(/\s+/)[0] : "";
     name = name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
 
     if (!name) {
@@ -341,13 +307,13 @@ export function processMessage(input, state) {
       };
     }
 
-    // Blocklist check!
     if (isBad(name)) {
       return {
         messages: [
           {
             nebo: "Nib otz~!",
             thoth: "Hmm, Nebo doesn't think that's your real name. Can you try again?",
+            emoticon: EMOTICONS.sad,
           },
         ],
         newState: state,
@@ -361,62 +327,104 @@ export function processMessage(input, state) {
       messages: [
         {
           nebo: `${neboName}! ${neboName}~!`,
-          thoth: `Nebo says hello, ${name}! He wants to know — are you a nice human?`,
+          thoth: `Hello ${name}! This is Nebo, and I'm Thoth, the ship's computer. We just crashed here on Earth. Can you help?`,
+          emoticon: EMOTICONS.worried,
         },
       ],
-      newState: { ...state, stage: 2, kidName: name },
+      newState: { ...state, stage: 2, kidName: name, subStage: null },
       expectingInput: "yesno",
     };
   }
 
-  // ---- Stages 2–5: yes/no conversation flow ----
-  if (stage >= 2 && stage <= 5) {
-    if (intent === "yes" || intent === "no") {
-      const stageData = SCRIPT[stage];
-      const response = stageData[intent];
-
-      // Stage 5 "yes" means they want to scan — ask for city
-      if (stage === 5 && intent === "yes") {
-        return {
-          messages: [response],
-          newState: { ...state, stage: 6 },
-          expectingInput: "city",
-        };
-      }
-
-      // Stage 5 "no" means they're done — stay at 5
-      if (stage === 5 && intent === "no") {
-        return {
-          messages: [response],
-          newState: { ...state, stage: 5 },
-          expectingInput: null,
-        };
-      }
-
+  // ---- Stage 2: "Can you help?" ----
+  if (stage === 2 && subStage !== "no_followup") {
+    if (intent === "yes") {
       return {
-        messages: [response],
-        newState: { ...state, stage: stage + 1 },
+        messages: [
+          {
+            nebo: "Pfa!",
+            thoth: `Oh Nebo's so glad and so am I! We're trying to launch our star scanner. Do you know what city we landed in?`,
+            emoticon: EMOTICONS.happy,
+          },
+        ],
+        newState: { ...state, stage: 3 },
+        expectingInput: "city",
+        showCityPicker: true,
+      };
+    }
+
+    if (intent === "no") {
+      return {
+        messages: [
+          {
+            nebo: "Nib otz~! Plaabpfaab~!",
+            thoth: "Oh no. Can you at least tell us where we landed?",
+            emoticon: EMOTICONS.sad,
+          },
+        ],
+        newState: { ...state, stage: 2, subStage: "no_followup" },
         expectingInput: "yesno",
       };
     }
 
-    // Kid said something unexpected
     return {
-      messages: [FALLBACK_RESPONSES[stage]],
+      messages: [FALLBACK_RESPONSES[2]],
       newState: state,
       expectingInput: "yesno",
     };
   }
 
-  // ---- Stage 6: waiting for city name ----
-  if (stage === 6) {
-    const cityName = input.replace(/[^a-zA-Z\s]/g, "").trim();
+  // ---- Stage 2 (no followup): "Can you at least tell us where we landed?" ----
+  if (stage === 2 && subStage === "no_followup") {
+    if (intent === "yes") {
+      return {
+        messages: [
+          {
+            nebo: "Noowoo!",
+            thoth: "Thank you! What city are we in?",
+            emoticon: EMOTICONS.happy,
+          },
+        ],
+        newState: { ...state, stage: 3, subStage: null },
+        expectingInput: "city",
+        showCityPicker: true,
+      };
+    }
 
+    if (intent === "no") {
+      return {
+        messages: [
+          {
+            nebo: "Naa~…",
+            thoth: "Alright, well, if you see any nice humans who can help, send them our way. Goodbye.",
+            emoticon: EMOTICONS.blank,
+          },
+        ],
+        newState: { ...state, stage: 90, subStage: null },
+        expectingInput: null,
+      };
+    }
+
+    return {
+      messages: [FALLBACK_RESPONSES["2no"]],
+      newState: state,
+      expectingInput: "yesno",
+    };
+  }
+
+  // ---- Stage 3: city picker ----
+  // This is mostly handled by the UI (dropdowns + skip button),
+  // but if someone types a city name, we handle it here too.
+  if (stage === 3) {
+    // The UI will call processCity() directly for dropdown selections.
+    // This handles free-text fallback.
+    const cityName = input.replace(/[^a-zA-Z\s'-]/g, "").trim();
     if (!cityName) {
       return {
-        messages: [FALLBACK_RESPONSES[6]],
+        messages: [FALLBACK_RESPONSES[3]],
         newState: state,
         expectingInput: "city",
+        showCityPicker: true,
       };
     }
 
@@ -426,62 +434,154 @@ export function processMessage(input, state) {
           {
             nebo: "Nib otz~!",
             thoth: "That doesn't look like a real city name. Can you try again?",
+            emoticon: EMOTICONS.sad,
           },
         ],
         newState: state,
         expectingInput: "city",
+        showCityPicker: true,
       };
     }
 
-    const capitalizedCity =
-      cityName.charAt(0).toUpperCase() + cityName.slice(1).toLowerCase();
-    const scanResult = buildScanResponse(capitalizedCity, kidName);
-
-    return {
-      messages: scanResult.messages,
-      newState: { ...state, stage: 8, city: capitalizedCity },
-      expectingInput: "yesno",
-    };
+    // Use it as-is
+    const capitalizedCity = cityName.charAt(0).toUpperCase() + cityName.slice(1).toLowerCase();
+    return processCitySelection(capitalizedCity, state);
   }
 
-  // ---- Stage 8: scan again? ----
-  if (stage === 8) {
+  // ---- Stage 5: scan again? ----
+  if (stage === 5) {
     if (intent === "yes") {
-      // Rescan with same city
-      const scanResult = buildScanResponse(city || "New York", kidName);
       return {
-        messages: scanResult.messages,
-        newState: { ...state, stage: 8 },
-        expectingInput: "yesno",
+        messages: [
+          {
+            nebo: "Miinii~!",
+            thoth: "Scanning the sky again...",
+            emoticon: EMOTICONS.scanning,
+          },
+        ],
+        newState: { ...state, stage: 4, scanCount: scanCount + 1 },
+        expectingInput: null,
+        showScanResult: true,
       };
     }
 
     if (intent === "no") {
       return {
-        messages: [SCRIPT[8].no],
-        newState: { ...state, stage: 8 },
+        messages: [
+          {
+            nebo: "Naa~…",
+            thoth: "That's okay! The stars will always be here. Come back anytime you want to explore.",
+            emoticon: EMOTICONS.chill,
+          },
+        ],
+        newState: { ...state, stage: 91 },
         expectingInput: null,
       };
     }
 
     return {
-      messages: [FALLBACK_RESPONSES[8]],
+      messages: [FALLBACK_RESPONSES[5]],
       newState: state,
       expectingInput: "yesno",
     };
   }
 
-  // Fallback for any weird state
+  // ---- Dead-end stages ----
+  if (stage === 90 || stage === 91) {
+    return {
+      messages: [
+        {
+          nebo: "…",
+          thoth: stage === 90
+            ? "Nebo's waiting for a nice human to come by. Say hi to start over!"
+            : "The stars will always be here! Say hi to explore again.",
+          emoticon: stage === 90 ? EMOTICONS.blank : EMOTICONS.chill,
+        },
+      ],
+      newState: { ...INITIAL_STATE },
+      expectingInput: "text",
+    };
+  }
+
+  // Catch-all
   return {
-    messages: [{ nebo: "…?", thoth: "Nebo's confused. Try again!" }],
+    messages: [{ nebo: "…?", thoth: "Nebo's confused. Try again!", emoticon: EMOTICONS.neutral }],
     newState: state,
     expectingInput: "text",
   };
 }
 
-// Export the initial state so App.js can use it
+// ============================================================
+// City selection handler — called by the UI when dropdowns are used
+// ============================================================
+
+export function processCitySelection(cityName, state) {
+  const timeMsg = isDaytime()
+    ? "Even though it's daytime, the stars are still shining bright above us. It's just hard to see them without a special scanner!"
+    : "The stars are shining bright above us!";
+
+  return {
+    messages: [
+      {
+        nebo: "Miinii~!",
+        thoth: `Great, launching the scanner above ${cityName} now! ${timeMsg}`,
+        emoticon: EMOTICONS.scanning,
+      },
+    ],
+    newState: { ...state, stage: 4, city: cityName, subStage: null },
+    expectingInput: null,
+    showScanResult: true,
+  };
+}
+
+// ============================================================
+// Skip handler — called when kid hits the SKIP button
+// ============================================================
+
+export function processSkip(state) {
+  return {
+    messages: [
+      {
+        nebo: "Noowoo!",
+        thoth: "All good, we can launch the scanner without it.",
+        emoticon: EMOTICONS.chill,
+      },
+    ],
+    newState: { ...state, stage: 4, city: "New York City", subStage: null },
+    expectingInput: null,
+    showScanResult: true,
+  };
+}
+
+// ============================================================
+// Scan complete handler — called after the star chart loads
+// ============================================================
+
+export function processScanComplete(state) {
+  const { kidName } = state;
+  const nameGreeting = kidName ? `${kidName}, look! ` : "Look! ";
+
+  return {
+    messages: [
+      {
+        nebo: "Wii paapmiipniip~!",
+        thoth: `${nameGreeting}Nebo found some stars above you! Tap "Learn about these stars" to explore them. Want to scan again?`,
+        emoticon: EMOTICONS.excited,
+      },
+    ],
+    newState: { ...state, stage: 5 },
+    expectingInput: "yesno",
+  };
+}
+
+// ============================================================
+// Export initial state
+// ============================================================
+
 export const INITIAL_STATE = {
   stage: 0,
   kidName: "",
   city: "",
+  scanCount: 0,
+  subStage: null,
 };

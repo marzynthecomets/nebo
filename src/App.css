@@ -1,5 +1,5 @@
 /*
- * NEBO — Styles
+ * NEBO — Styles v2
  *
  * Add to public/index.html <head>:
  * <link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@400;700&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
@@ -56,32 +56,33 @@ body {
   pointer-events: none;
 }
 
+.porthole {
+  z-index: 5;
+}
+
 /* ---- Nebo — three states ---- */
 .nebo-layer {
   position: absolute;
   left: 50%;
   width: 28%;
   height: auto;
-  z-index: 3;
+  z-index: 4;
   pointer-events: none;
   transition: top 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-/* Idle: deeply hidden — only very top of head visible */
 .nebo-idle {
   top: 42%;
   transform: translate(-50%, -50%);
   animation: neboBobIdle 4s ease-in-out infinite;
 }
 
-/* Naming: slightly more visible, still mostly peeking */
 .nebo-peeking {
   top: 38%;
   transform: translate(-50%, -50%);
   animation: neboBobIdle 4s ease-in-out infinite;
 }
 
-/* Chatting: fully out, bobbing proudly */
 .nebo-active {
   top: 27%;
   transform: translate(-50%, -50%);
@@ -89,20 +90,18 @@ body {
 }
 
 /* ============================================================
- * Nebo speech bubble — overlaps porthole, that's fine
+ * Nebo speech bubble
  * ============================================================ */
 .nebo-bubble {
   position: absolute;
   top: 40%;
-  left: 50%;
-  transform: translateX(-50%);
+  left: 10%;
+  right: 10%;
   z-index: 9;
   background: #F8FFDD;
   border: 3px solid #00B709;
   border-radius: 100px;
   padding: 12px 26px;
-  width: 80%;
-  max-width: 80%;
   text-align: center;
   pointer-events: none;
   animation: bubbleIn 0.3s ease forwards;
@@ -113,6 +112,83 @@ body {
   font-size: 13px;
   color: #1a3300;
   line-height: 1.5;
+}
+
+/* ============================================================
+ * Star chart area — between porthole and panel
+ * ============================================================ */
+.star-chart-area {
+  position: absolute;
+  top: 50%;
+  left: 8%;
+  right: 8%;
+  z-index: 8;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  animation: fadeIn 0.5s ease forwards;
+}
+
+.star-chart-image {
+  width: 100%;
+  max-height: 30vh;
+  object-fit: contain;
+  border-radius: 12px;
+  border: 2px solid rgba(204, 182, 255, 0.3);
+}
+
+.star-chart-loading {
+  width: 100%;
+  height: 20vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.star-chart-placeholder {
+  width: 100%;
+  height: 15vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 0, 30, 0.6);
+  border-radius: 12px;
+  border: 2px solid rgba(204, 182, 255, 0.2);
+}
+
+.scanner-beam {
+  width: 80%;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, #CCB6FF, #00B709, #CCB6FF, transparent);
+  border-radius: 2px;
+  animation: scanBeam 2s ease-in-out infinite;
+}
+
+.scanner-text {
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  color: #CCB6FF;
+  text-align: center;
+}
+
+.learn-button {
+  background: rgba(204, 182, 255, 0.15);
+  border: 2px solid #CCB6FF;
+  border-radius: 100px;
+  padding: 8px 20px;
+  color: #CCB6FF;
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.learn-button:hover {
+  background: rgba(204, 182, 255, 0.25);
+  box-shadow: 0 0 12px rgba(204, 182, 255, 0.3);
 }
 
 /* ============================================================
@@ -131,16 +207,15 @@ body {
   display: flex;
   flex-direction: column;
   backdrop-filter: blur(16px);
-  height: 40%;
+  max-height: 40%;
 }
 
 /* ============================================================
- * Thoth avatar — bigger, overlaps top-left corner
- * Figma spec scaled: ~110px circle, chunky border
+ * Thoth avatar
  * ============================================================ */
 .thoth-avatar {
   position: absolute;
-  top: -55px;
+  top: -45px;
   left: 16px;
   width: 90px;
   height: 90px;
@@ -161,15 +236,15 @@ body {
 
 .thoth-emoticon {
   font-family: 'Space Mono', monospace;
-  font-size: 28px;
+  font-size: 22px;
   color: #CCB6FF;
   letter-spacing: -1px;
   user-select: none;
+  transition: all 0.3s ease;
 }
 
 /* ============================================================
  * Panel content
- * padding-top clears the avatar overlap zone
  * ============================================================ */
 .panel-content {
   display: flex;
@@ -181,9 +256,7 @@ body {
   gap: 8px;
 }
 
-/* Narrative idle block */
 .narrative-block {
-  flex: 1;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -209,7 +282,6 @@ body {
  * ============================================================ */
 .chat-log-wrapper {
   position: relative;
-  flex: 1;
   overflow: hidden;
   min-height: 0;
 }
@@ -224,11 +296,10 @@ body {
 }
 
 .chat-log {
-  position: absolute;
-  inset: 0;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
+  justify-content: flex-end;
   gap: 6px;
   padding-top: 4px;
   padding-bottom: 4px;
@@ -255,6 +326,94 @@ body {
   padding: 4px 12px;
   border-radius: 10px;
   max-width: 85%;
+}
+
+/* ============================================================
+ * City picker
+ * ============================================================ */
+.city-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.picker-row {
+  display: flex;
+  gap: 6px;
+}
+
+.picker-select {
+  flex: 1;
+  background: rgba(204, 182, 255, 0.08);
+  border: 2px solid #CCB6FF;
+  border-radius: 12px;
+  padding: 8px 10px;
+  color: #fff;
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  outline: none;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M3 5l3 3 3-3' fill='none' stroke='%23CCB6FF' stroke-width='1.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding-right: 28px;
+}
+
+.picker-select:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.picker-select option {
+  background: #1a0040;
+  color: #fff;
+}
+
+.picker-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.picker-submit {
+  flex: 1;
+  background: rgba(0, 183, 9, 0.15);
+  border: 2px solid #00B709;
+  border-radius: 100px;
+  padding: 8px 16px;
+  color: #00B709;
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.picker-submit:hover:not(:disabled) {
+  background: rgba(0, 183, 9, 0.25);
+  box-shadow: 0 0 10px rgba(0, 183, 9, 0.2);
+}
+
+.picker-submit:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.picker-skip {
+  background: transparent;
+  border: 2px solid rgba(204, 182, 255, 0.4);
+  border-radius: 100px;
+  padding: 8px 16px;
+  color: rgba(204, 182, 255, 0.6);
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.picker-skip:hover {
+  border-color: #CCB6FF;
+  color: #CCB6FF;
 }
 
 /* ---- Input ---- */
@@ -304,6 +463,119 @@ body {
 }
 
 /* ============================================================
+ * Learn Overlay — slides up from bottom
+ * ============================================================ */
+.learn-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: flex-end;
+  animation: fadeIn 0.2s ease;
+}
+
+.learn-panel {
+  width: 100%;
+  max-height: 70%;
+  background: rgba(10, 0, 40, 0.97);
+  border: 3px solid #CCB6FF;
+  border-radius: 24px 24px 0 0;
+  padding: 24px 20px 32px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  animation: slideUp 0.3s ease;
+  overflow-y: auto;
+  backdrop-filter: blur(20px);
+}
+
+.learn-close {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  background: none;
+  border: none;
+  color: rgba(204, 182, 255, 0.6);
+  font-size: 24px;
+  cursor: pointer;
+  z-index: 51;
+  padding: 4px 8px;
+}
+
+.learn-close:hover {
+  color: #CCB6FF;
+}
+
+.learn-title {
+  font-family: 'Comfortaa', cursive;
+  font-size: 18px;
+  color: #CCB6FF;
+  font-weight: 700;
+}
+
+.learn-subtitle {
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.6);
+  line-height: 1.5;
+}
+
+.learn-star-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.learn-star-button {
+  background: rgba(204, 182, 255, 0.08);
+  border: 2px solid rgba(204, 182, 255, 0.3);
+  border-radius: 16px;
+  padding: 14px 18px;
+  color: #fff;
+  font-family: 'Comfortaa', cursive;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: left;
+}
+
+.learn-star-button:hover {
+  border-color: #CCB6FF;
+  background: rgba(204, 182, 255, 0.15);
+  box-shadow: 0 0 12px rgba(204, 182, 255, 0.15);
+}
+
+.learn-star-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.learn-fact {
+  font-family: 'Space Mono', monospace;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.85);
+  line-height: 1.8;
+}
+
+.learn-back {
+  background: none;
+  border: none;
+  color: #CCB6FF;
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  cursor: pointer;
+  text-align: left;
+  padding: 4px 0;
+}
+
+.learn-back:hover {
+  text-decoration: underline;
+}
+
+/* ============================================================
  * Animations
  * ============================================================ */
 
@@ -329,6 +601,22 @@ body {
 }
 
 @keyframes bubbleIn {
-  from { opacity: 0; transform: translateX(-50%) translateY(8px); }
-  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+
+@keyframes scanBeam {
+  0%   { opacity: 0.3; transform: scaleX(0.5); }
+  50%  { opacity: 1;   transform: scaleX(1); }
+  100% { opacity: 0.3; transform: scaleX(0.5); }
 }
