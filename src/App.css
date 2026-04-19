@@ -2,17 +2,9 @@
  * ============================================================
  * NEBO — Styles
  * ============================================================
- * 
- * Hey Mars! Here's how the CSS works:
- * 
- * The .nebo-container is like a picture frame.
- * Everything inside it uses position: absolute, which means
- * "place me at exact coordinates inside the frame."
- * 
- * z-index controls the stacking order.
- * Higher number = closer to the viewer.
- * Think of it like layers in Photoshop — you already
- * know this concept from design!
+ *
+ * Mars! Original layer styles are untouched up top.
+ * New chat UI styles are at the bottom, marked clearly.
  * ============================================================
  */
 
@@ -95,11 +87,6 @@ body {
 }
 
 /* ---- Nebo — positioned in the porthole area ---- */
-/*
- * Mars: you'll probably need to tweak the top/left/width
- * values to get Nebo perfectly centered in the porthole.
- * Change the numbers, save, and the browser updates live!
- */
 .nebo-layer {
   position: absolute;
   top: 27%;
@@ -113,12 +100,6 @@ body {
 }
 
 /* ---- Dialogue area — sits on top of the interface panel ---- */
-/*
- * Mars: same deal — tweak bottom/left/right/height
- * to align this with the dark screen area on your
- * interface.png. Every export is slightly different
- * so these are starting guesses.
- */
 .dialogue-area {
   position: absolute;
   bottom: 8%;
@@ -128,16 +109,69 @@ body {
   z-index: 10;
   display: flex;
   flex-direction: column;
+  padding: 12px 16px;
+  overflow: hidden;
+}
+
+/* ============================================================
+ * NEW — Chat UI Styles
+ * ============================================================ */
+
+/* ---- Start screen ---- */
+.start-screen {
+  display: flex;
   justify-content: center;
-  gap: 8px;
-  padding: 16px 20px;
+  align-items: center;
+  height: 100%;
+}
+
+.start-button {
+  background: transparent;
+  border: 1px solid #BD96FA;
+  color: #BD96FA;
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+  padding: 10px 24px;
+  border-radius: 20px;
+  cursor: pointer;
+  letter-spacing: 2px;
+  transition: all 0.3s ease;
+  animation: buttonPulse 3s ease-in-out infinite;
+}
+
+.start-button:hover {
+  background: rgba(189, 150, 250, 0.15);
+  box-shadow: 0 0 20px rgba(189, 150, 250, 0.3);
+}
+
+/* ---- Chat log — scrollable conversation history ---- */
+.chat-log {
+  flex: 1;
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-bottom: 8px;
+  /* Hide scrollbar but keep scrolling */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.chat-log::-webkit-scrollbar {
+  display: none;
+}
+
+/* ---- Bot messages (Nebo + Thoth) ---- */
+.bot-message {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 /* Nebo's alien text — glowing green */
 .nebo-text {
   color: #b4ff96;
-  font-size: 14px;
+  font-size: 13px;
   font-style: italic;
   line-height: 1.4;
   letter-spacing: 1px;
@@ -147,8 +181,123 @@ body {
 /* Thoth's English translation */
 .thoth-text {
   color: #BD96FA;
-  font-size: 14px;
-  line-height: 1.5;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+/* ---- Kid's messages ---- */
+.user-text {
+  color: #ffffff;
+  font-size: 13px;
+  line-height: 1.4;
+  align-self: flex-end;
+  background: rgba(255, 255, 255, 0.1);
+  padding: 4px 10px;
+  border-radius: 10px;
+  max-width: 80%;
+}
+
+/* ---- Input area — bottom of dialogue ---- */
+.input-area {
+  padding-top: 6px;
+  flex-shrink: 0;
+}
+
+/* ---- Yes / No buttons ---- */
+.yesno-buttons {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+
+.yn-button {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  padding: 6px 20px;
+  border-radius: 14px;
+  cursor: pointer;
+  border: 1px solid;
+  transition: all 0.2s ease;
+  letter-spacing: 1px;
+}
+
+.yes-btn {
+  background: rgba(180, 255, 150, 0.1);
+  border-color: #b4ff96;
+  color: #b4ff96;
+}
+
+.yes-btn:hover {
+  background: rgba(180, 255, 150, 0.25);
+  box-shadow: 0 0 12px rgba(180, 255, 150, 0.3);
+}
+
+.no-btn {
+  background: rgba(250, 150, 150, 0.1);
+  border-color: #fa9696;
+  color: #fa9696;
+}
+
+.no-btn:hover {
+  background: rgba(250, 150, 150, 0.25);
+  box-shadow: 0 0 12px rgba(250, 150, 150, 0.3);
+}
+
+/* ---- Text input row ---- */
+.text-input-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.chat-input {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(189, 150, 250, 0.4);
+  border-radius: 14px;
+  padding: 7px 12px;
+  color: #ffffff;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+
+.chat-input::placeholder {
+  color: rgba(189, 150, 250, 0.5);
+}
+
+.chat-input:focus {
+  border-color: #BD96FA;
+  box-shadow: 0 0 8px rgba(189, 150, 250, 0.2);
+}
+
+.send-button {
+  background: rgba(189, 150, 250, 0.15);
+  border: 1px solid rgba(189, 150, 250, 0.4);
+  color: #BD96FA;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.send-button:hover {
+  background: rgba(189, 150, 250, 0.3);
+  box-shadow: 0 0 12px rgba(189, 150, 250, 0.3);
+}
+
+/* ---- End / restart ---- */
+.end-message {
+  display: flex;
+  justify-content: center;
+  padding-top: 8px;
 }
 
 /* ============================================================
@@ -178,4 +327,10 @@ body {
 @keyframes textGlow {
   0%, 100% { text-shadow: 0 0 8px rgba(180, 255, 150, 0.4); }
   50%      { text-shadow: 0 0 16px rgba(180, 255, 150, 0.8); }
+}
+
+/* Start button gentle pulse */
+@keyframes buttonPulse {
+  0%, 100% { box-shadow: 0 0 8px rgba(189, 150, 250, 0.1); }
+  50%      { box-shadow: 0 0 20px rgba(189, 150, 250, 0.25); }
 }
