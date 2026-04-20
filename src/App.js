@@ -13,19 +13,28 @@ import "./App.css";
 
 /*
  * ============================================================
- * NEBO — App
+ * NEBO — App v3 (Figma-accurate)
  * ============================================================
  *
- * Mars! Here's the updated flow:
+ * Mars! Key structural change:
+ *
+ * The ship layers (sky, backwall, fronthull, porthole) ALWAYS
+ * render — they're never removed from the DOM. During the
+ * scanning phase:
+ *   - Nebo gets className "nebo-scanning" (moves to top-right)
+ *   - The Thoth panel is hidden
+ *   - The speech bubble is hidden
+ *   - A .scanner-overlay sits on top of the ship layers
+ *     with near-opaque black, containing the scanner UI
+ *
+ * This matches your Figma where the hull edges peek through.
  *
  * Phases:
  *   "idle"     → narrative text, waiting for hello
  *   "naming"   → Nebo peeking, waiting for name
- *   "chatting"  → normal yes/no conversation
- *   "picking"   → state/city dropdowns visible
- *   "scanning"  → star chart loading/displayed
- *
- * The Thoth emoticon now updates dynamically from the engine.
+ *   "chatting" → normal yes/no conversation
+ *   "picking"  → state/city dropdowns visible
+ *   "scanning" → scanner overlay on top of ship
  * ============================================================
  */
 
@@ -45,10 +54,11 @@ function App() {
   const [starChartUrl, setStarChartUrl] = useState("");
   const [starChartLoading, setStarChartLoading] = useState(false);
 
-  // Learn overlay state
-  const [showLearnOverlay, setShowLearnOverlay] = useState(false);
+  // Learn state (star facts shown inline in scanner dialogue)
   const [learnStars, setLearnStars] = useState([]);
-  const [selectedStar, setSelectedStar] = useState(null);
+
+  // Scanner tray dialogue (separate from main chatLog)
+  const [scannerDialogue, setScannerDialogue] = useState("");
 
   const chatEndRef = useRef(null);
   useEffect(() => {
@@ -88,13 +98,13 @@ function App() {
   async function triggerScan(state) {
     setPhase("scanning");
     setStarChartLoading(true);
+    setScannerDialogue("");
 
     // Look up coordinates
     let lat = DEFAULT_LOCATION.lat;
     let lon = DEFAULT_LOCATION.lon;
 
     if (state.city && state.city !== "New York City") {
-      // Try to find in our database
       for (const stateName of STATE_NAMES) {
         const coords = getCoordinates(stateName, state.city);
         if (coords) {
@@ -119,7 +129,6 @@ function App() {
         const data = await response.json();
         setStarChartUrl(data.imageUrl);
       } else {
-        // Fallback: use a placeholder
         console.warn("Star chart API failed, using fallback");
         setStarChartUrl("");
       }
@@ -137,10 +146,13 @@ function App() {
     const lastEmoticon = [...scanDone.messages].reverse().find((m) => m.emoticon);
     if (lastEmoticon) setEmoticon(lastEmoticon.emoticon);
 
-    setChatLog((prev) => [
-      ...prev,
-      ...scanDone.messages.map((m) => ({ type: "bot", thoth: m.thoth })),
-    ]);
+    // Set scanner dialogue — exact copy from Figma design,
+    // plus list the star names so the kid knows what to type
+    const starNames = stars.map((s) => s.name).join(", ");
+    setScannerDialogue(
+      `Learning about the stars will help us get home! Which star do you want to learn more about? ${starNames}`
+    );
+
     setGameState(scanDone.newState);
   }
 
@@ -166,7 +178,48 @@ function App() {
       return;
     }
 
-    // Chatting or scanning — normal flow
+    // Scanning phase — kid can type a star name OR yes/no
+    if (phase === "scanning") {
+      // First, check if they typed a star name
+      const matchedStar = learnStars.find(
+        (s) => s.name.toLowerCase() === trimmed.toLowerCase()
+      );
+
+      if (matchedStar) {
+        // Show the star fact in the scanner dialogue
+        setScannerDialogue(matchedStar.fact + " Want to scan again?");
+        setEmoticon(EMOTICONS.excited);
+        // Move to stage 5 so yes/no works for "scan again?"
+        setGameState((prev) => ({ ...prev, stage: 5 }));
+        return;
+      }
+
+      // Otherwise, check for yes/no (scan again / exit)
+      const result = processMessage(trimmed, gameState);
+
+      // If rescan triggered, stay in scanner
+      if (result.showScanResult) {
+        triggerScan(result.newState);
+        return;
+      }
+
+      // Otherwise exit scanner → back to chatting
+      const lastNebo = [...result.messages].reverse().find((m) => m.nebo);
+      if (lastNebo) setLatestNebo(lastNebo.nebo);
+      const lastEmoticon = [...result.messages].reverse().find((m) => m.emoticon);
+      if (lastEmoticon) setEmoticon(lastEmoticon.emoticon);
+
+      setChatLog((prev) => [
+        ...prev,
+        { type: "user", text: trimmed },
+        ...result.messages.map((m) => ({ type: "bot", thoth: m.thoth })),
+      ]);
+      setGameState(result.newState);
+      setPhase("chatting");
+      return;
+    }
+
+    // Chatting or picking — normal flow
     const result = processMessage(trimmed, gameState);
     applyResult(result, trimmed);
   }
@@ -174,7 +227,7 @@ function App() {
   // ---- City picker handlers ----
   function handleStateChange(e) {
     setSelectedState(e.target.value);
-    setSelectedCity(""); // Reset city when state changes
+    setSelectedCity("");
   }
 
   function handleCityChange(e) {
@@ -196,32 +249,24 @@ function App() {
     setSelectedCity("");
   }
 
-  // ---- Learn overlay handlers ----
-  function handleLearnOpen() {
-    setShowLearnOverlay(true);
-    setSelectedStar(null);
-  }
-
-  function handleStarSelect(star) {
-    setSelectedStar(star);
-  }
-
-  function handleLearnClose() {
-    setShowLearnOverlay(false);
-    setSelectedStar(null);
-  }
-
   function handleKeyDown(e) {
     if (e.key === "Enter") handleSend(inputValue);
   }
 
-  const isActive = phase !== "idle";
+  // "Active" means we show the Thoth panel with chat — NOT during scanning
+  const isActive = phase !== "idle" && phase !== "scanning";
   const cities = selectedState ? getCitiesForState(selectedState) : [];
 
   return (
     <div className="nebo-container">
 
-      {/* LAYER 1: Sky */}
+      {/* ============================================================
+       * SHIP LAYERS — always rendered, even during scanning
+       * The scanner overlay sits on top with near-opaque black
+       * so the hull edges peek through at the sides.
+       * ============================================================ */}
+
+      {/* Sky */}
       <div className="sky-layer">
         <div className="stars">
           {Array.from({ length: 25 }).map((_, i) => (
@@ -244,204 +289,207 @@ function App() {
       <img src="/assets/backwall.png" alt="" className="full-layer" draggable={false} />
       <img src="/assets/fronthull.png" alt="" className="full-layer" draggable={false} />
 
+      {/* Nebo — class changes based on phase */}
       <img
         src="/assets/nebo.png"
         alt="Nebo the alien"
         className={`nebo-layer ${
-          phase === "idle"   ? "nebo-idle" :
-          phase === "naming" ? "nebo-peeking" :
-                               "nebo-active"
+          phase === "idle"     ? "nebo-idle" :
+          phase === "naming"   ? "nebo-peeking" :
+          phase === "scanning" ? "nebo-scanning" :
+                                 "nebo-active"
         }`}
         draggable={false}
       />
 
       <img src="/assets/porthole_transp.png" alt="" className="full-layer porthole" draggable={false} />
 
-      {/* Nebo speech bubble */}
+      {/* Nebo speech bubble — hidden during scanning */}
       {isActive && latestNebo && (
         <div className="nebo-bubble">
           <p className="nebo-bubble-text">{latestNebo}</p>
         </div>
       )}
 
-      {/* Star chart display — overlays above the panel when scanning */}
+      {/* ============================================================
+       * SCANNER OVERLAY — only during scanning phase
+       * Sits on top of ship layers (z-index 15)
+       * ============================================================ */}
       {phase === "scanning" && (
-        <div className="star-chart-area">
-          {starChartLoading ? (
-            <div className="star-chart-loading">
-              <div className="scanner-beam" />
-              <p className="scanner-text">Scanning the sky...</p>
-            </div>
-          ) : starChartUrl ? (
-            <img
-              src={starChartUrl}
-              alt="Star chart of the sky above you"
-              className="star-chart-image"
-            />
-          ) : (
-            <div className="star-chart-placeholder">
-              <p className="scanner-text">
+        <div className="scanner-overlay">
+          {/* Header */}
+          <div className="scanner-header">
+            <h1 className="scanner-title">Star Scanner</h1>
+            <p className="scanner-subtitle">
+              Scanning the skies above {gameState.city || "New York City"}...
+            </p>
+          </div>
+
+          {/* API results box */}
+          <div className="scanner-results-box">
+            {starChartLoading ? (
+              <div className="scanner-loading">
+                <div className="scanner-beam" />
+                <p className="scanner-beam-text">Scanning the sky...</p>
+              </div>
+            ) : starChartUrl ? (
+              <img
+                src={starChartUrl}
+                alt="Star chart of the sky above you"
+              />
+            ) : (
+              <p className="scanner-results-placeholder">
                 Nebo's scanner found stars above you!
               </p>
+            )}
+          </div>
+
+          {/* Thoth dialogue section */}
+          <div className="scanner-thoth-section">
+            <div className="scanner-thoth-avatar">
+              <span className="scanner-thoth-emoticon">
+                {emoticon || EMOTICONS.excited}
+              </span>
             </div>
-          )}
-          <button className="learn-button" onClick={handleLearnOpen}>
-            Learn about these stars
-          </button>
+            <div className="scanner-thoth-body">
+              <p className="scanner-thoth-label">Thoth:</p>
+              <p className="scanner-thoth-text">
+                {scannerDialogue || "Scanning the sky above you..."}
+              </p>
+            </div>
+          </div>
+
+          {/* Input — for "scan again?" yes/no */}
+          <div className="scanner-input-area">
+            <div className="text-input-row">
+              <input
+                type="text"
+                className="chat-input"
+                placeholder="Type here..."
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onKeyDown={handleKeyDown}
+                autoFocus
+              />
+              <button className="send-button" onClick={() => handleSend(inputValue)}>
+                →
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
-      {/* Thoth panel */}
-      <div className="thoth-panel">
-
-        {/* Thoth avatar with dynamic emoticon */}
-        <div className={`thoth-avatar ${isActive ? "thoth-avatar-active" : ""}`}>
-          {isActive && (
-            <span className="thoth-emoticon">{emoticon || EMOTICONS.neutral}</span>
-          )}
-        </div>
-
-        {/* Panel content */}
-        <div className="panel-content">
-
-          {/* Idle: narrative text */}
-          {phase === "idle" && (
-            <div className="narrative-block">
-              <p className="narrative-text">
-                You find a spaceship, and a mysterious glowing creature looks out at you.
-              </p>
-              <p className="narrative-prompt">Say hello?</p>
-            </div>
-          )}
-
-          {/* Active: chat log */}
-          {isActive && (
-            <div className="chat-log-wrapper">
-              <div className="chat-fade-top" />
-              <div className="chat-log">
-                {chatLog.map((entry, i) =>
-                  entry.type === "user"
-                    ? <p key={i} className="user-text">{entry.text}</p>
-                    : <p key={i} className="thoth-text">{entry.thoth}</p>
-                )}
-                <div ref={chatEndRef} />
-              </div>
-            </div>
-          )}
-
-          {/* City picker — shown at stage 3 */}
-          {phase === "picking" && (
-            <div className="city-picker">
-              <div className="picker-row">
-                <select
-                  className="picker-select"
-                  value={selectedState}
-                  onChange={handleStateChange}
-                >
-                  <option value="">State...</option>
-                  {STATE_NAMES.map((s) => (
-                    <option key={s} value={s}>{s}</option>
-                  ))}
-                </select>
-                <select
-                  className="picker-select"
-                  value={selectedCity}
-                  onChange={handleCityChange}
-                  disabled={!selectedState}
-                >
-                  <option value="">City...</option>
-                  {cities.map((c) => (
-                    <option key={c.city} value={c.city}>{c.city}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="picker-buttons">
-                <button
-                  className="picker-submit"
-                  onClick={handleCitySubmit}
-                  disabled={!selectedCity}
-                >
-                  Launch Scanner
-                </button>
-                <button className="picker-skip" onClick={handleSkip}>
-                  Skip
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Text input — hidden during city picking */}
-          {phase !== "picking" && (
-            <div className="input-area">
-              <div className="text-input-row">
-                <input
-                  type="text"
-                  className="chat-input"
-                  placeholder={
-                    phase === "idle" ? "Say hello..." :
-                    phase === "naming" ? "Type your name..." :
-                    "Type here..."
-                  }
-                  value={inputValue}
-                  onChange={(e) => setInputValue(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  autoFocus
-                />
-                <button className="send-button" onClick={() => handleSend(inputValue)}>
-                  →
-                </button>
-              </div>
-            </div>
-          )}
-
-        </div>
-      </div>
-
       {/* ============================================================
-       * Learn Overlay — slides up from bottom
+       * THOTH PANEL — conversation view (idle, naming, chatting, picking)
+       * Hidden during scanning (scanner overlay replaces it)
        * ============================================================ */}
-      {showLearnOverlay && (
-        <div className="learn-overlay" onClick={handleLearnClose}>
-          <div className="learn-panel" onClick={(e) => e.stopPropagation()}>
+      {phase !== "scanning" && (
+        <div className="thoth-panel">
 
-            <button className="learn-close" onClick={handleLearnClose}>×</button>
+          {/* Thoth avatar with dynamic emoticon */}
+          <div className={`thoth-avatar ${isActive ? "thoth-avatar-active" : ""}`}>
+            {isActive && (
+              <span className="thoth-emoticon">{emoticon || EMOTICONS.neutral}</span>
+            )}
+          </div>
 
-            <h2 className="learn-title">
-              {selectedStar ? selectedStar.name : "Stars Above You"}
-            </h2>
+          {/* Panel content */}
+          <div className="panel-content">
 
-            {!selectedStar ? (
-              /* Star list */
-              <div className="learn-star-list">
-                <p className="learn-subtitle">
-                  Nebo found these stars! Tap one to learn more.
+            {/* Idle: narrative text */}
+            {phase === "idle" && (
+              <div className="narrative-block">
+                <p className="narrative-text">
+                  You find a spaceship, and a mysterious glowing creature looks out at you.
                 </p>
-                {learnStars.map((star, i) => (
-                  <button
-                    key={i}
-                    className="learn-star-button"
-                    onClick={() => handleStarSelect(star)}
-                  >
-                    {star.name}
-                  </button>
-                ))}
+                <p className="narrative-prompt">Say hello?</p>
               </div>
-            ) : (
-              /* Star detail */
-              <div className="learn-star-detail">
-                <p className="learn-fact">{selectedStar.fact}</p>
-                <button
-                  className="learn-back"
-                  onClick={() => setSelectedStar(null)}
-                >
-                  ← Back to all stars
-                </button>
+            )}
+
+            {/* Active: chat log */}
+            {isActive && (
+              <div className="chat-log-wrapper">
+                {chatLog.length > 4 && <div className="chat-fade-top" />}
+                <div className="chat-log">
+                  {chatLog.map((entry, i) =>
+                    entry.type === "user"
+                      ? <p key={i} className="user-text">{entry.text}</p>
+                      : <p key={i} className="thoth-text">{entry.thoth}</p>
+                  )}
+                  <div ref={chatEndRef} />
+                </div>
+              </div>
+            )}
+
+            {/* City picker — shown during picking phase */}
+            {phase === "picking" && (
+              <div className="city-picker">
+                <div className="picker-row">
+                  <select
+                    className="picker-select"
+                    value={selectedState}
+                    onChange={handleStateChange}
+                  >
+                    <option value="">State...</option>
+                    {STATE_NAMES.map((s) => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
+                  <select
+                    className="picker-select"
+                    value={selectedCity}
+                    onChange={handleCityChange}
+                    disabled={!selectedState}
+                  >
+                    <option value="">City...</option>
+                    {cities.map((c) => (
+                      <option key={c.city} value={c.city}>{c.city}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="picker-buttons">
+                  <button
+                    className="picker-submit"
+                    onClick={handleCitySubmit}
+                    disabled={!selectedCity}
+                  >
+                    Launch Scanner
+                  </button>
+                  <button className="picker-skip" onClick={handleSkip}>
+                    Skip
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Text input — hidden during city picking */}
+            {phase !== "picking" && (
+              <div className="input-area">
+                <div className="text-input-row">
+                  <input
+                    type="text"
+                    className="chat-input"
+                    placeholder={
+                      phase === "idle" ? "Say hello..." :
+                      phase === "naming" ? "Type your name..." :
+                      "Type here..."
+                    }
+                    value={inputValue}
+                    onChange={(e) => setInputValue(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    autoFocus
+                  />
+                  <button className="send-button" onClick={() => handleSend(inputValue)}>
+                    →
+                  </button>
+                </div>
               </div>
             )}
 
           </div>
         </div>
       )}
+
 
     </div>
   );

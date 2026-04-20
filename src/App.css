@@ -1,7 +1,19 @@
 /*
- * NEBO — Styles v2
+ * NEBO — Styles v3 (Figma-accurate)
  *
- * Add to public/index.html <head>:
+ * CHANGES from v2:
+ * 1. Launch Scanner button: green → solid lavender fill
+ * 2. Scanner view: ship layers STAY VISIBLE underneath
+ *    - Scanner content is a dark overlay panel (bottom ~80%)
+ *    - Nebo repositions to top-right, overlapping porthole edge
+ *    - Porthole + dots still visible in background
+ *    - "STAR SCANNER" header in yellow-green (#E8FFB0)
+ *    - Results box has lime/yellow-green border
+ *    - Thoth: small circle avatar (left) + "Thoth:" label + text (right)
+ *    - Input at bottom
+ * 3. chat-fade-top only shows when chatLog > 4 (JS change)
+ *
+ * Fonts (add to public/index.html <head>):
  * <link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@400;700&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
  */
 
@@ -60,37 +72,53 @@ body {
   z-index: 5;
 }
 
-/* ---- Nebo — three states ---- */
+/* ---- Nebo — four states ---- */
 .nebo-layer {
   position: absolute;
-  left: 50%;
   width: 28%;
   height: auto;
   z-index: 4;
   pointer-events: none;
-  transition: top 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: top 0.8s cubic-bezier(0.34, 1.56, 0.64, 1),
+              left 0.6s ease,
+              right 0.6s ease,
+              width 0.6s ease;
 }
 
 .nebo-idle {
   top: 42%;
+  left: 50%;
   transform: translate(-50%, -50%);
   animation: neboBobIdle 4s ease-in-out infinite;
 }
 
 .nebo-peeking {
   top: 38%;
+  left: 50%;
   transform: translate(-50%, -50%);
   animation: neboBobIdle 4s ease-in-out infinite;
 }
 
 .nebo-active {
   top: 27%;
+  left: 50%;
   transform: translate(-50%, -50%);
   animation: neboBob 4s ease-in-out infinite;
 }
 
+/* Scanner state: Nebo moves to top-right, overlapping porthole edge */
+.nebo-scanning {
+  top: 2%;
+  left: auto;
+  right: -2%;
+  width: 30%;
+  transform: none;
+  z-index: 16;
+  animation: neboBobScanner 4s ease-in-out infinite;
+}
+
 /* ============================================================
- * Nebo speech bubble
+ * Nebo speech bubble (hidden during scanning via JS)
  * ============================================================ */
 .nebo-bubble {
   position: absolute;
@@ -115,48 +143,84 @@ body {
 }
 
 /* ============================================================
- * Star chart area — between porthole and panel
+ * SCANNER OVERLAY
+ *
+ * Ship layers (sky, backwall, fronthull, porthole, dots)
+ * remain visible. This overlay covers the bottom ~80% with
+ * near-opaque black so hull edges peek through.
+ * Nebo is repositioned via .nebo-scanning class above.
  * ============================================================ */
-.star-chart-area {
+.scanner-overlay {
   position: absolute;
-  top: 50%;
-  left: 8%;
-  right: 8%;
-  z-index: 8;
+  top: 18%;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 15;
+  background: rgba(0, 0, 0, 0.92);
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  animation: fadeIn 0.5s ease forwards;
+  padding: 24px 20px 20px 20px;
+  animation: scannerSlideUp 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-.star-chart-image {
+/* Header: STAR SCANNER + subtitle */
+.scanner-header {
+  flex-shrink: 0;
+  margin-bottom: 14px;
+}
+
+.scanner-title {
+  font-family: 'Comfortaa', cursive;
+  font-weight: 700;
+  font-size: 22px;
+  color: #E8FFB0;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+.scanner-subtitle {
+  font-family: 'Space Mono', monospace;
+  font-size: 13px;
+  color: #E8FFB0;
+  margin-top: 4px;
+  line-height: 1.5;
+}
+
+/* API results box — lime/yellow-green border */
+.scanner-results-box {
+  border: 2px solid #E8FFB0;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex: 1;
+  min-height: 0;
+  margin-bottom: 16px;
+}
+
+.scanner-results-box img {
   width: 100%;
-  max-height: 30vh;
+  height: 100%;
   object-fit: contain;
-  border-radius: 12px;
-  border: 2px solid rgba(204, 182, 255, 0.3);
 }
 
-.star-chart-loading {
-  width: 100%;
-  height: 20vh;
+.scanner-results-placeholder {
+  font-family: 'Space Mono', monospace;
+  font-size: 13px;
+  color: rgba(232, 255, 176, 0.7);
+  text-align: center;
+  padding: 20px;
+  line-height: 1.6;
+}
+
+.scanner-loading {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 12px;
-}
-
-.star-chart-placeholder {
-  width: 100%;
-  height: 15vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(10, 0, 30, 0.6);
-  border-radius: 12px;
-  border: 2px solid rgba(204, 182, 255, 0.2);
+  gap: 14px;
+  padding: 20px;
 }
 
 .scanner-beam {
@@ -167,32 +231,66 @@ body {
   animation: scanBeam 2s ease-in-out infinite;
 }
 
-.scanner-text {
+.scanner-beam-text {
   font-family: 'Space Mono', monospace;
   font-size: 11px;
   color: #CCB6FF;
-  text-align: center;
 }
 
-.learn-button {
-  background: rgba(204, 182, 255, 0.15);
+/* Thoth section inside scanner — small avatar left, text right */
+.scanner-thoth-section {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  flex-shrink: 0;
+  margin-bottom: 14px;
+}
+
+.scanner-thoth-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
   border: 2px solid #CCB6FF;
-  border-radius: 100px;
-  padding: 8px 20px;
-  color: #CCB6FF;
-  font-family: 'Space Mono', monospace;
-  font-size: 11px;
-  cursor: pointer;
-  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
 
-.learn-button:hover {
-  background: rgba(204, 182, 255, 0.25);
-  box-shadow: 0 0 12px rgba(204, 182, 255, 0.3);
+.scanner-thoth-emoticon {
+  font-family: 'Space Mono', monospace;
+  font-size: 13px;
+  color: #CCB6FF;
+  letter-spacing: -1px;
+  user-select: none;
+}
+
+.scanner-thoth-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.scanner-thoth-label {
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  color: rgba(204, 182, 255, 0.7);
+  margin-bottom: 2px;
+}
+
+.scanner-thoth-text {
+  font-family: 'Space Mono', monospace;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.9);
+  line-height: 1.65;
+}
+
+/* Input area inside scanner */
+.scanner-input-area {
+  flex-shrink: 0;
 }
 
 /* ============================================================
- * Thoth panel
+ * Thoth panel (conversation phases: idle, naming, chatting, picking)
  * ============================================================ */
 .thoth-panel {
   position: absolute;
@@ -211,7 +309,7 @@ body {
 }
 
 /* ============================================================
- * Thoth avatar
+ * Thoth avatar (conversation view)
  * ============================================================ */
 .thoth-avatar {
   position: absolute;
@@ -376,13 +474,16 @@ body {
   gap: 8px;
 }
 
+/* ============================================================
+ * Launch Scanner button — solid lavender fill (matches Figma)
+ * ============================================================ */
 .picker-submit {
   flex: 1;
-  background: rgba(0, 183, 9, 0.15);
-  border: 2px solid #00B709;
+  background: rgba(204, 182, 255, 0.35);
+  border: 2px solid #CCB6FF;
   border-radius: 100px;
   padding: 8px 16px;
-  color: #00B709;
+  color: #fff;
   font-family: 'Space Mono', monospace;
   font-size: 11px;
   cursor: pointer;
@@ -390,8 +491,8 @@ body {
 }
 
 .picker-submit:hover:not(:disabled) {
-  background: rgba(0, 183, 9, 0.25);
-  box-shadow: 0 0 10px rgba(0, 183, 9, 0.2);
+  background: rgba(204, 182, 255, 0.5);
+  box-shadow: 0 0 12px rgba(204, 182, 255, 0.3);
 }
 
 .picker-submit:disabled {
@@ -600,6 +701,11 @@ body {
   50%       { transform: translate(-50%, -50%) translateY(-6px); }
 }
 
+@keyframes neboBobScanner {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-5px); }
+}
+
 @keyframes bubbleIn {
   from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0); }
@@ -613,6 +719,11 @@ body {
 @keyframes slideUp {
   from { transform: translateY(100%); }
   to   { transform: translateY(0); }
+}
+
+@keyframes scannerSlideUp {
+  from { transform: translateY(30%); opacity: 0; }
+  to   { transform: translateY(0); opacity: 1; }
 }
 
 @keyframes scanBeam {
