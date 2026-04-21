@@ -162,6 +162,7 @@ body {
   flex-direction: column;
   padding: 24px 20px 20px 20px;
   animation: scannerSlideUp 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  overflow-y: auto;
 }
 
 /* Header: STAR SCANNER + subtitle */
@@ -195,15 +196,18 @@ body {
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  flex: 1;
-  min-height: 0;
+  flex-shrink: 0;
   margin-bottom: 16px;
+}
+
+.scanner-results-box.loading {
+  min-height: 30vh;
 }
 
 .scanner-results-box img {
   width: 100%;
-  height: 100%;
-  object-fit: contain;
+  height: auto;
+  display: block;
 }
 
 .scanner-results-placeholder {
@@ -233,15 +237,18 @@ body {
 
 .scanner-beam-text {
   font-family: 'Space Mono', monospace;
-  font-size: 11px;
+  font-size: 12px;
   color: #CCB6FF;
+  text-align: center;
+  padding: 0 12px;
+  line-height: 1.6;
 }
 
 /* Thoth section inside scanner — small avatar left, text right */
 .scanner-thoth-section {
   display: flex;
   gap: 12px;
-  align-items: flex-start;
+  align-items: center;
   flex-shrink: 0;
   margin-bottom: 14px;
 }
@@ -272,14 +279,14 @@ body {
 
 .scanner-thoth-label {
   font-family: 'Space Mono', monospace;
-  font-size: 11px;
+  font-size: 12px;
   color: rgba(204, 182, 255, 0.7);
   margin-bottom: 2px;
 }
 
 .scanner-thoth-text {
   font-family: 'Space Mono', monospace;
-  font-size: 12px;
+  font-size: 13px;
   color: rgba(255, 255, 255, 0.9);
   line-height: 1.65;
 }
@@ -287,6 +294,60 @@ body {
 /* Input area inside scanner */
 .scanner-input-area {
   flex-shrink: 0;
+}
+
+/* Post-fact navigation buttons */
+.scanner-nav-buttons {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.scanner-nav-button {
+  flex: 1;
+  background: rgba(204, 182, 255, 0.12);
+  border: 2px solid #CCB6FF;
+  border-radius: 100px;
+  padding: 10px 14px;
+  color: #CCB6FF;
+  font-family: 'Space Mono', monospace;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: center;
+}
+
+.scanner-nav-button:hover {
+  background: rgba(204, 182, 255, 0.22);
+  box-shadow: 0 0 12px rgba(204, 182, 255, 0.3);
+}
+
+/* Star picker buttons */
+.scanner-star-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.scanner-star-button {
+  background: rgba(232, 255, 176, 0.08);
+  border: 2px solid rgba(232, 255, 176, 0.4);
+  border-radius: 100px;
+  padding: 10px 18px;
+  color: #E8FFB0;
+  font-family: 'Comfortaa', cursive;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: center;
+}
+
+.scanner-star-button:hover {
+  border-color: #E8FFB0;
+  background: rgba(232, 255, 176, 0.15);
+  box-shadow: 0 0 12px rgba(232, 255, 176, 0.2);
 }
 
 /* ============================================================
@@ -305,7 +366,7 @@ body {
   display: flex;
   flex-direction: column;
   backdrop-filter: blur(16px);
-  max-height: 40%;
+  max-height: 44%;
 }
 
 /* ============================================================
@@ -324,12 +385,16 @@ body {
   align-items: center;
   justify-content: center;
   z-index: 11;
-  transition: border-color 0.4s ease, box-shadow 0.4s ease;
+  transition: border-color 0.4s ease, box-shadow 0.4s ease, transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s ease;
+  transform: scale(0);
+  opacity: 0;
 }
 
 .thoth-avatar-active {
   border-color: #CCB6FF;
   box-shadow: 0 0 24px rgba(204, 182, 255, 0.3);
+  transform: scale(1);
+  opacity: 1;
 }
 
 .thoth-emoticon {
@@ -364,15 +429,16 @@ body {
 .narrative-text {
   font-family: 'Space Mono', monospace;
   color: rgba(255, 255, 255, 0.7);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.7;
 }
 
 .narrative-prompt {
   font-family: 'Space Mono', monospace;
   color: #CCB6FF;
-  font-size: 12px;
+  font-size: 13px;
   font-style: italic;
+  margin-bottom: 8px;
 }
 
 /* ============================================================
@@ -410,14 +476,14 @@ body {
 .thoth-text {
   font-family: 'Space Mono', monospace;
   color: #CCB6FF;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.65;
 }
 
 .user-text {
   font-family: 'Space Mono', monospace;
   color: #fff;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.5;
   align-self: flex-end;
   background: rgba(255, 255, 255, 0.08);
@@ -448,7 +514,7 @@ body {
   padding: 8px 10px;
   color: #fff;
   font-family: 'Space Mono', monospace;
-  font-size: 11px;
+  font-size: 12px;
   outline: none;
   cursor: pointer;
   appearance: none;
@@ -485,7 +551,7 @@ body {
   padding: 8px 16px;
   color: #fff;
   font-family: 'Space Mono', monospace;
-  font-size: 11px;
+  font-size: 12px;
   cursor: pointer;
   transition: all 0.2s ease;
 }
@@ -507,7 +573,7 @@ body {
   padding: 8px 16px;
   color: rgba(204, 182, 255, 0.6);
   font-family: 'Space Mono', monospace;
-  font-size: 11px;
+  font-size: 12px;
   cursor: pointer;
   transition: all 0.2s ease;
 }
@@ -534,7 +600,7 @@ body {
   padding: 9px 16px;
   color: #fff;
   font-family: 'Space Mono', monospace;
-  font-size: 12px;
+  font-size: 13px;
   outline: none;
   transition: box-shadow 0.2s ease;
 }
@@ -617,7 +683,7 @@ body {
 
 .learn-subtitle {
   font-family: 'Space Mono', monospace;
-  font-size: 11px;
+  font-size: 12px;
   color: rgba(255, 255, 255, 0.6);
   line-height: 1.5;
 }
@@ -656,7 +722,7 @@ body {
 
 .learn-fact {
   font-family: 'Space Mono', monospace;
-  font-size: 12px;
+  font-size: 13px;
   color: rgba(255, 255, 255, 0.85);
   line-height: 1.8;
 }
@@ -666,7 +732,7 @@ body {
   border: none;
   color: #CCB6FF;
   font-family: 'Space Mono', monospace;
-  font-size: 11px;
+  font-size: 12px;
   cursor: pointer;
   text-align: left;
   padding: 4px 0;
@@ -730,4 +796,105 @@ body {
   0%   { opacity: 0.3; transform: scaleX(0.5); }
   50%  { opacity: 1;   transform: scaleX(1); }
   100% { opacity: 0.3; transform: scaleX(0.5); }
+}
+
+/* ============================================================
+ * Goodbye button + fade to black
+ * ============================================================ */
+.goodbye-button {
+  width: 100%;
+  background: rgba(204, 182, 255, 0.15);
+  border: 2px solid #CCB6FF;
+  border-radius: 100px;
+  padding: 12px 20px;
+  color: #CCB6FF;
+  font-family: 'Space Mono', monospace;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.goodbye-button:hover {
+  background: rgba(204, 182, 255, 0.25);
+  box-shadow: 0 0 14px rgba(204, 182, 255, 0.3);
+}
+
+.goodbye-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 100;
+  background: #000;
+  animation: fadeToBlack 2s ease forwards;
+}
+
+@keyframes fadeToBlack {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* ============================================================
+ * Close scanner button — top-left of scanner overlay
+ * ============================================================ */
+.scanner-close-button {
+  position: absolute;
+  top: 6%;
+  left: 16px;
+  z-index: 22;
+  background: rgba(0, 0, 0, 0.7);
+  border: 2px solid #E8FFB0;
+  border-radius: 100px;
+  padding: 8px 18px;
+  color: #E8FFB0;
+  font-family: 'Space Mono', monospace;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(8px);
+}
+
+.scanner-close-button:hover {
+  background: rgba(232, 255, 176, 0.15);
+  box-shadow: 0 0 12px rgba(232, 255, 176, 0.2);
+}
+
+/* ============================================================
+ * Hub buttons — post-scanner menu
+ * ============================================================ */
+.hub-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.hub-button {
+  background: rgba(204, 182, 255, 0.12);
+  border: 2px solid #CCB6FF;
+  border-radius: 100px;
+  padding: 10px 18px;
+  color: #CCB6FF;
+  font-family: 'Space Mono', monospace;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: center;
+}
+
+.hub-button:hover {
+  background: rgba(204, 182, 255, 0.22);
+  box-shadow: 0 0 12px rgba(204, 182, 255, 0.3);
+}
+
+.hub-button-goodbye {
+  border-color: rgba(204, 182, 255, 0.4);
+  color: rgba(204, 182, 255, 0.6);
+}
+
+.hub-button-goodbye:hover {
+  border-color: #CCB6FF;
+  color: #CCB6FF;
+}
+
+/* Bold star name in fact display */
+.scanner-star-name {
+  color: #E8FFB0;
 }

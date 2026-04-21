@@ -1,10 +1,15 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import {
   processMessage,
   processCitySelection,
   processSkip,
   processScanComplete,
-  getStarsForCity,
+  pickConstellation,
+  getStarsForConstellation,
+  getConstellationName,
+  getShuffledFacts,
+  fuzzyMatch,
+  translateLine,
   EMOTICONS,
   INITIAL_STATE,
 } from "./neboEngine";
@@ -13,30 +18,43 @@ import "./App.css";
 
 /*
  * ============================================================
- * NEBO — App v3 (Figma-accurate)
+ * NEBO — App v3 (Fully Integrated)
  * ============================================================
  *
- * Mars! Key structural change:
- *
- * The ship layers (sky, backwall, fronthull, porthole) ALWAYS
- * render — they're never removed from the DOM. During the
- * scanning phase:
- *   - Nebo gets className "nebo-scanning" (moves to top-right)
- *   - The Thoth panel is hidden
- *   - The speech bubble is hidden
- *   - A .scanner-overlay sits on top of the ship layers
- *     with near-opaque black, containing the scanner UI
- *
- * This matches your Figma where the hull edges peek through.
- *
- * Phases:
- *   "idle"     → narrative text, waiting for hello
- *   "naming"   → Nebo peeking, waiting for name
- *   "chatting" → normal yes/no conversation
- *   "picking"  → state/city dropdowns visible
- *   "scanning" → scanner overlay on top of ship
+ * Changes:
+ * - Seasonal constellation picker
+ * - Loading facts cycle (2.5s, randomized)
+ * - API timeout fallback (15s → cached chart)
+ * - Star name input with typo tolerance
+ * - Mobile auto-focus fix (desktop only)
+ * - Thoth label removed from scanner view
+ * - Text size bump (12→13px via CSS)
+ * - Repeat constellation tracking
  * ============================================================
  */
+
+// Fallback star chart URL — cached Orion chart in case API is slow/down
+const FALLBACK_CHART_URL = "/assets/fallback-starchart.png";
+
+// API timeout in milliseconds
+const API_TIMEOUT = 20000;
+
+// Common city abbreviations/shorthands
+const CITY_SHORTHANDS = {
+  "la": "Los Angeles", "nyc": "New York City", "sf": "San Francisco",
+  "atl": "Atlanta", "chi": "Chicago", "phx": "Phoenix", "philly": "Philadelphia",
+  "dc": "Washington", "nola": "New Orleans", "lv": "Las Vegas", "kc": "Kansas City",
+  "stl": "St. Louis", "slc": "Salt Lake City", "det": "Detroit", "bos": "Boston",
+  "pdx": "Portland", "sea": "Seattle", "den": "Denver", "hou": "Houston",
+  "dal": "Dallas", "sa": "San Antonio", "sd": "San Diego", "tb": "Tampa",
+  "jax": "Jacksonville", "mem": "Memphis", "nash": "Nashville", "cle": "Cleveland",
+  "pgh": "Pittsburgh", "mke": "Milwaukee", "mpls": "Minneapolis", "indy": "Indianapolis",
+};
+
+function expandCityShorthand(input) {
+  const lower = input.toLowerCase().trim();
+  return CITY_SHORTHANDS[lower] || null;
+}
 
 function App() {
   const [phase, setPhase] = useState("idle");
@@ -54,11 +72,20 @@ function App() {
   const [starChartUrl, setStarChartUrl] = useState("");
   const [starChartLoading, setStarChartLoading] = useState(false);
 
-  // Learn state (star facts shown inline in scanner dialogue)
-  const [learnStars, setLearnStars] = useState([]);
+  // Loading facts state
+  const [loadingFact, setLoadingFact] = useState("");
+  const loadingFactsRef = useRef([]);
+  const loadingIntervalRef = useRef(null);
 
-  // Scanner tray dialogue (separate from main chatLog)
+  // Scanner state
   const [scannerDialogue, setScannerDialogue] = useState("");
+  const [scannerStars, setScannerStars] = useState([]);
+  const [scannerConstellationName, setScannerConstellationName] = useState("");
+  const [showingFact, setShowingFact] = useState(false);
+  const [selectedStarName, setSelectedStarName] = useState("");
+
+  // Desktop detection for auto-focus
+  const isDesktop = typeof window !== "undefined" && window.innerWidth > 768;
 
   const chatEndRef = useRef(null);
   useEffect(() => {
@@ -66,6 +93,38 @@ function App() {
       chatEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
   }, [chatLog]);
+
+  // ---- Start loading facts rotation ----
+  const startLoadingFacts = useCallback(() => {
+    const facts = getShuffledFacts();
+    loadingFactsRef.current = facts;
+    let index = 0;
+    setLoadingFact(facts[0]);
+
+    function scheduleNext() {
+      const currentFact = facts[index];
+      // Longer facts get more reading time
+      const delay = currentFact.length > 80 ? 5500 : 4000;
+      loadingIntervalRef.current = setTimeout(() => {
+        index = (index + 1) % facts.length;
+        setLoadingFact(facts[index]);
+        scheduleNext();
+      }, delay);
+    }
+    scheduleNext();
+  }, []);
+
+  const stopLoadingFacts = useCallback(() => {
+    if (loadingIntervalRef.current) {
+      clearTimeout(loadingIntervalRef.current);
+      loadingIntervalRef.current = null;
+    }
+  }, []);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => stopLoadingFacts();
+  }, [stopLoadingFacts]);
 
   // ---- Helper: apply engine result to UI state ----
   function applyResult(result, userText = null) {
@@ -99,6 +158,11 @@ function App() {
     setPhase("scanning");
     setStarChartLoading(true);
     setScannerDialogue("");
+    setStarChartUrl("");
+    setShowingFact(false);
+
+    // Start the loading facts rotation
+    startLoadingFacts();
 
     // Look up coordinates
     let lat = DEFAULT_LOCATION.lat;
@@ -115,42 +179,62 @@ function App() {
       }
     }
 
-    // Get stars for the overlay
-    const stars = getStarsForCity(state.city || "New York City", state.scanCount);
-    setLearnStars(stars);
+    // Pick a seasonal constellation (avoiding repeats)
+    const constellationId = pickConstellation(
+      state.city || "New York City",
+      state.scanCount,
+      state.seenConstellations || []
+    );
 
-    // Call the Netlify function for the star chart
+    // If all constellations seen, use a fallback
+    const chartConstellation = constellationId || "umi";
+
+    // Get stars for this constellation
+    const stars = getStarsForConstellation(chartConstellation);
+    setScannerStars(stars);
+    setScannerConstellationName(getConstellationName(chartConstellation));
+
+    // Call the Netlify function with timeout
     try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), API_TIMEOUT);
+
       const response = await fetch(
-        `/.netlify/functions/star-scan?lat=${lat}&lon=${lon}`
+        `https://neboscanner.netlify.app/.netlify/functions/star-scan?lat=${lat}&lon=${lon}&constellation=${chartConstellation}`,
+        { signal: controller.signal }
       );
+
+      clearTimeout(timeout);
 
       if (response.ok) {
         const data = await response.json();
-        setStarChartUrl(data.imageUrl);
+        setStarChartUrl(data.imageUrl || FALLBACK_CHART_URL);
       } else {
         console.warn("Star chart API failed, using fallback");
-        setStarChartUrl("");
+        setStarChartUrl(FALLBACK_CHART_URL);
       }
     } catch (err) {
-      console.warn("Star chart fetch failed:", err);
-      setStarChartUrl("");
+      if (err.name === "AbortError") {
+        console.warn("Star chart API timed out after 15s, using fallback");
+      } else {
+        console.warn("Star chart fetch failed:", err);
+      }
+      setStarChartUrl(FALLBACK_CHART_URL);
     }
 
+    // Stop the loading facts
+    stopLoadingFacts();
     setStarChartLoading(false);
 
     // Tell the engine the scan is done
-    const scanDone = processScanComplete(state);
+    const scanDone = processScanComplete(state, stars, chartConstellation);
     const lastNebo = [...scanDone.messages].reverse().find((m) => m.nebo);
     if (lastNebo) setLatestNebo(lastNebo.nebo);
     const lastEmoticon = [...scanDone.messages].reverse().find((m) => m.emoticon);
     if (lastEmoticon) setEmoticon(lastEmoticon.emoticon);
 
-    // Set scanner dialogue — exact copy from Figma design,
-    // plus list the star names so the kid knows what to type
-    const starNames = stars.map((s) => s.name).join(", ");
     setScannerDialogue(
-      `Learning about the stars will help us get home! Which star do you want to learn more about? ${starNames}`
+      scanDone.messages.map((m) => m.thoth).join(" ")
     );
 
     setGameState(scanDone.newState);
@@ -158,9 +242,15 @@ function App() {
 
   // ---- Send text message ----
   function handleSend(text) {
-    const trimmed = text.trim();
+    let trimmed = text.trim();
     if (!trimmed) return;
     setInputValue("");
+
+    // Expand city shorthands anywhere in the flow
+    const expanded = expandCityShorthand(trimmed);
+    if (expanded && (gameState.stage === 2 || gameState.stage === 3)) {
+      trimmed = expanded;
+    }
 
     if (phase === "idle") {
       const result = processMessage("hello", INITIAL_STATE);
@@ -178,44 +268,52 @@ function App() {
       return;
     }
 
-    // Scanning phase — kid can type a star name OR yes/no
+    // Scanning phase — star name, yes/no, or random input
     if (phase === "scanning") {
-      // First, check if they typed a star name
-      const matchedStar = learnStars.find(
-        (s) => s.name.toLowerCase() === trimmed.toLowerCase()
-      );
+      // First check for star name match (with typo tolerance)
+      const starNames = scannerStars.map((s) => s.name);
+      const matchedStar = fuzzyMatch(trimmed, starNames);
 
       if (matchedStar) {
-        // Show the star fact in the scanner dialogue
-        setScannerDialogue(matchedStar.fact + " Want to scan again?");
+        const star = scannerStars.find((s) => s.name === matchedStar);
+        setScannerDialogue(star.fact);
         setEmoticon(EMOTICONS.excited);
-        // Move to stage 5 so yes/no works for "scan again?"
+        setShowingFact(true);
         setGameState((prev) => ({ ...prev, stage: 5 }));
         return;
       }
 
-      // Otherwise, check for yes/no (scan again / exit)
+      // Then check yes/no
       const result = processMessage(trimmed, gameState);
 
-      // If rescan triggered, stay in scanner
       if (result.showScanResult) {
         triggerScan(result.newState);
         return;
       }
 
-      // Otherwise exit scanner → back to chatting
-      const lastNebo = [...result.messages].reverse().find((m) => m.nebo);
-      if (lastNebo) setLatestNebo(lastNebo.nebo);
-      const lastEmoticon = [...result.messages].reverse().find((m) => m.emoticon);
-      if (lastEmoticon) setEmoticon(lastEmoticon.emoticon);
+      // If stage changed away from scanning, exit to chatting
+      if (result.newState.stage !== 5 && result.newState.stage !== 4) {
+        const lastNebo = [...result.messages].reverse().find((m) => m.nebo);
+        if (lastNebo) setLatestNebo(lastNebo.nebo);
+        const lastEmoticon = [...result.messages].reverse().find((m) => m.emoticon);
+        if (lastEmoticon) setEmoticon(lastEmoticon.emoticon);
 
-      setChatLog((prev) => [
-        ...prev,
-        { type: "user", text: trimmed },
-        ...result.messages.map((m) => ({ type: "bot", thoth: m.thoth })),
-      ]);
+        setChatLog((prev) => [
+          ...prev,
+          { type: "user", text: trimmed },
+          ...result.messages.map((m) => ({ type: "bot", thoth: m.thoth })),
+        ]);
+        setGameState(result.newState);
+        setPhase("chatting");
+        return;
+      }
+
+      // Fallback: update scanner dialogue with the response
+      const thothLine = result.messages.map((m) => m.thoth).join(" ");
+      setScannerDialogue(thothLine);
+      const lastEmoticon2 = [...result.messages].reverse().find((m) => m.emoticon);
+      if (lastEmoticon2) setEmoticon(lastEmoticon2.emoticon);
       setGameState(result.newState);
-      setPhase("chatting");
       return;
     }
 
@@ -253,20 +351,60 @@ function App() {
     if (e.key === "Enter") handleSend(inputValue);
   }
 
-  // "Active" means we show the Thoth panel with chat — NOT during scanning
-  const isActive = phase !== "idle" && phase !== "scanning";
+  const isActive = phase !== "idle" && phase !== "scanning" && phase !== "goodbye";
   const cities = selectedState ? getCitiesForState(selectedState) : [];
+
+  // ---- Goodbye handler ----
+  function handleGoodbye() {
+    setPhase("goodbye");
+  }
+
+  // ---- Scanner navigation handlers ----
+  function handleBackToConstellation() {
+    setShowingFact(false);
+    const starNames = scannerStars.map((s) => s.name).join(", ");
+    setScannerDialogue(
+      `Learning about the stars will help us get home! Which star do you want to learn more about? ${starNames}`
+    );
+  }
+
+  function handleNewScan() {
+    setShowingFact(false);
+    triggerScan({ ...gameState, scanCount: gameState.scanCount + 1 });
+  }
+
+  function handleCloseScanner() {
+    setShowingFact(false);
+    setPhase("hub");
+    setLatestNebo(translateLine("We did it!"));
+    setEmoticon(EMOTICONS.happy);
+    setChatLog((prev) => [
+      ...prev,
+      { type: "bot", thoth: "Thanks for helping us map the stars! What do you want to do next?" },
+    ]);
+  }
+
+  // ---- Hub handlers ----
+  function handleHubNasa() {
+    // Placeholder — to be built out later
+    window.open("https://apod.nasa.gov/apod/", "_blank");
+  }
+
+  function handleHubLearn() {
+    // Placeholder — to be built out later
+    window.open("https://www.natgeokids.com/uk/discover/science/space/", "_blank");
+  }
+
+  function handleHubGoodbye() {
+    handleGoodbye();
+  }
 
   return (
     <div className="nebo-container">
 
       {/* ============================================================
-       * SHIP LAYERS — always rendered, even during scanning
-       * The scanner overlay sits on top with near-opaque black
-       * so the hull edges peek through at the sides.
+       * SHIP LAYERS — always rendered
        * ============================================================ */}
-
-      {/* Sky */}
       <div className="sky-layer">
         <div className="stars">
           {Array.from({ length: 25 }).map((_, i) => (
@@ -289,7 +427,6 @@ function App() {
       <img src="/assets/backwall.png" alt="" className="full-layer" draggable={false} />
       <img src="/assets/fronthull.png" alt="" className="full-layer" draggable={false} />
 
-      {/* Nebo — class changes based on phase */}
       <img
         src="/assets/nebo.png"
         alt="Nebo the alien"
@@ -312,30 +449,37 @@ function App() {
       )}
 
       {/* ============================================================
-       * SCANNER OVERLAY — only during scanning phase
-       * Sits on top of ship layers (z-index 15)
+       * SCANNER OVERLAY
        * ============================================================ */}
       {phase === "scanning" && (
-        <div className="scanner-overlay">
-          {/* Header */}
-          <div className="scanner-header">
+        <>
+          {/* Close button — sits in ship area ABOVE the overlay */}
+          <button className="scanner-close-button" onClick={handleCloseScanner}>
+            close scanner
+          </button>
+
+          <div className="scanner-overlay">
+            <div className="scanner-header">
             <h1 className="scanner-title">Star Scanner</h1>
             <p className="scanner-subtitle">
-              Scanning the skies above {gameState.city || "New York City"}...
+              {starChartLoading
+                ? `Scanning the skies above ${gameState.city || "New York City"}...`
+                : `We've located the constellation ${scannerConstellationName}!`
+              }
             </p>
           </div>
 
-          {/* API results box */}
-          <div className="scanner-results-box">
+          <div className={`scanner-results-box ${starChartLoading ? "loading" : ""}`}>
             {starChartLoading ? (
               <div className="scanner-loading">
                 <div className="scanner-beam" />
-                <p className="scanner-beam-text">Scanning the sky...</p>
+                <p className="scanner-beam-text">{loadingFact || "Scanning the sky..."}</p>
               </div>
             ) : starChartUrl ? (
               <img
                 src={starChartUrl}
                 alt="Star chart of the sky above you"
+                onError={() => setStarChartUrl(FALLBACK_CHART_URL)}
               />
             ) : (
               <p className="scanner-results-placeholder">
@@ -344,7 +488,6 @@ function App() {
             )}
           </div>
 
-          {/* Thoth dialogue section */}
           <div className="scanner-thoth-section">
             <div className="scanner-thoth-avatar">
               <span className="scanner-thoth-emoticon">
@@ -352,51 +495,62 @@ function App() {
               </span>
             </div>
             <div className="scanner-thoth-body">
-              <p className="scanner-thoth-label">Thoth:</p>
               <p className="scanner-thoth-text">
-                {scannerDialogue || "Scanning the sky above you..."}
+                {showingFact && selectedStarName && (
+                  <strong className="scanner-star-name">{selectedStarName}: </strong>
+                )}
+                {scannerDialogue || "Nebo loves looking at the stars..."}
               </p>
             </div>
           </div>
 
-          {/* Input — for "scan again?" yes/no */}
-          <div className="scanner-input-area">
-            <div className="text-input-row">
-              <input
-                type="text"
-                className="chat-input"
-                placeholder="Type here..."
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                onKeyDown={handleKeyDown}
-                autoFocus
-              />
-              <button className="send-button" onClick={() => handleSend(inputValue)}>
-                →
+          {/* Star picker buttons OR navigation buttons */}
+          {showingFact ? (
+            <div className="scanner-nav-buttons">
+              <button className="scanner-nav-button" onClick={handleBackToConstellation}>
+                Back
+              </button>
+              <button className="scanner-nav-button" onClick={handleNewScan}>
+                New Scan
               </button>
             </div>
-          </div>
+          ) : !starChartLoading && (
+            <div className="scanner-star-buttons">
+              {scannerStars.map((star, i) => (
+                <button
+                  key={i}
+                  className="scanner-star-button"
+                  onClick={() => {
+                    setScannerDialogue(star.fact);
+                    setSelectedStarName(star.name);
+                    setEmoticon(EMOTICONS.excited);
+                    setShowingFact(true);
+                    setGameState((prev) => ({ ...prev, stage: 5 }));
+                  }}
+                >
+                  {star.name}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
+        </>
       )}
 
       {/* ============================================================
-       * THOTH PANEL — conversation view (idle, naming, chatting, picking)
-       * Hidden during scanning (scanner overlay replaces it)
+       * THOTH PANEL — conversation view
        * ============================================================ */}
       {phase !== "scanning" && (
         <div className="thoth-panel">
 
-          {/* Thoth avatar with dynamic emoticon */}
           <div className={`thoth-avatar ${isActive ? "thoth-avatar-active" : ""}`}>
             {isActive && (
               <span className="thoth-emoticon">{emoticon || EMOTICONS.neutral}</span>
             )}
           </div>
 
-          {/* Panel content */}
           <div className="panel-content">
 
-            {/* Idle: narrative text */}
             {phase === "idle" && (
               <div className="narrative-block">
                 <p className="narrative-text">
@@ -406,7 +560,6 @@ function App() {
               </div>
             )}
 
-            {/* Active: chat log */}
             {isActive && (
               <div className="chat-log-wrapper">
                 {chatLog.length > 4 && <div className="chat-fade-top" />}
@@ -421,7 +574,6 @@ function App() {
               </div>
             )}
 
-            {/* City picker — shown during picking phase */}
             {phase === "picking" && (
               <div className="city-picker">
                 <div className="picker-row">
@@ -462,27 +614,46 @@ function App() {
               </div>
             )}
 
-            {/* Text input — hidden during city picking */}
-            {phase !== "picking" && (
+            {phase === "hub" && (
+              <div className="hub-buttons">
+                <button className="hub-button" onClick={handleHubNasa}>
+                  Get the NASA Photo of the Day
+                </button>
+                <button className="hub-button" onClick={handleHubLearn}>
+                  Learn about space
+                </button>
+                <button className="hub-button hub-button-goodbye" onClick={handleHubGoodbye}>
+                  Say Goodbye
+                </button>
+              </div>
+            )}
+
+            {phase !== "picking" && phase !== "hub" && (
               <div className="input-area">
-                <div className="text-input-row">
-                  <input
-                    type="text"
-                    className="chat-input"
-                    placeholder={
-                      phase === "idle" ? "Say hello..." :
-                      phase === "naming" ? "Type your name..." :
-                      "Type here..."
-                    }
-                    value={inputValue}
-                    onChange={(e) => setInputValue(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    autoFocus
-                  />
-                  <button className="send-button" onClick={() => handleSend(inputValue)}>
-                    →
+                {gameState.stage === 90 || gameState.stage === 91 ? (
+                  <button className="goodbye-button" onClick={handleGoodbye}>
+                    Goodbye
                   </button>
-                </div>
+                ) : (
+                  <div className="text-input-row">
+                    <input
+                      type="text"
+                      className="chat-input"
+                      placeholder={
+                        phase === "idle" ? "Say hello..." :
+                        phase === "naming" ? "Type your name..." :
+                        "Type here..."
+                      }
+                      value={inputValue}
+                      onChange={(e) => setInputValue(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                      autoFocus={isDesktop}
+                    />
+                    <button className="send-button" onClick={() => handleSend(inputValue)}>
+                      →
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 
@@ -490,6 +661,12 @@ function App() {
         </div>
       )}
 
+      {/* ============================================================
+       * GOODBYE — fade to black overlay
+       * ============================================================ */}
+      {phase === "goodbye" && (
+        <div className="goodbye-overlay" />
+      )}
 
     </div>
   );
