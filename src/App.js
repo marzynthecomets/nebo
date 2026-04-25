@@ -14,22 +14,20 @@ import {
   INITIAL_STATE,
 } from "./neboEngine";
 import { STATE_NAMES, getCitiesForState, getCoordinates, DEFAULT_LOCATION } from "./usCities";
+import { speakAsThoth, cancelThothSpeech } from "./thothSpeech";
 import "./App.css";
 
 /*
  * ============================================================
- * NEBO — App v3 (Fully Integrated)
+ * NEBO — App v4
  * ============================================================
  *
- * Changes:
- * - Seasonal constellation picker
- * - Loading facts cycle (2.5s, randomized)
- * - API timeout fallback (15s → cached chart)
- * - Star name input with typo tolerance
- * - Mobile auto-focus fix (desktop only)
- * - Thoth label removed from scanner view
- * - Text size bump (12→13px via CSS)
- * - Repeat constellation tracking
+ * Changes from v3:
+ * - Title screen with logo + "Let's go!" button
+ * - Conditional panel padding (smaller when idle, 48px with avatar)
+ * - Skip city defaults to "Scanning the skies above us!"
+ * - Thoth speech wired in (speakAsThoth on new dialogue)
+ * - Scanning emoticon updated to ★_★
  * ============================================================
  */
 
@@ -57,7 +55,7 @@ function expandCityShorthand(input) {
 }
 
 function App() {
-  const [phase, setPhase] = useState("idle");
+  const [phase, setPhase] = useState("title");
   const [chatLog, setChatLog] = useState([]);
   const [gameState, setGameState] = useState(INITIAL_STATE);
   const [inputValue, setInputValue] = useState("");
@@ -93,6 +91,39 @@ function App() {
       chatEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
   }, [chatLog]);
+
+  // ---- Thoth speech: speak new chat log entries ----
+  const lastSpokenIndexRef = useRef(-1);
+
+  useEffect(() => {
+    if (chatLog.length === 0) return;
+
+    // Find the latest bot message
+    const latestBotIndex = chatLog.length - 1;
+    const latestEntry = chatLog[latestBotIndex];
+
+    // Only speak bot messages, and only if we haven't spoken this one yet
+    if (
+      latestEntry.type === "bot" &&
+      latestEntry.thoth &&
+      latestBotIndex > lastSpokenIndexRef.current
+    ) {
+      speakAsThoth(latestEntry.thoth);
+      lastSpokenIndexRef.current = latestBotIndex;
+    }
+  }, [chatLog]);
+
+  // ---- Thoth speech: speak scanner dialogue changes ----
+  useEffect(() => {
+    if (scannerDialogue && phase === "scanning") {
+      speakAsThoth(scannerDialogue);
+    }
+  }, [scannerDialogue, phase]);
+
+  // ---- Cancel speech on unmount ----
+  useEffect(() => {
+    return () => cancelThothSpeech();
+  }, []);
 
   // ---- Start loading facts rotation ----
   const startLoadingFacts = useCallback(() => {
@@ -160,6 +191,9 @@ function App() {
     setScannerDialogue("");
     setStarChartUrl("");
     setShowingFact(false);
+
+    // Cancel any ongoing speech before scanning
+    cancelThothSpeech();
 
     // Start the loading facts rotation
     startLoadingFacts();
@@ -351,11 +385,12 @@ function App() {
     if (e.key === "Enter") handleSend(inputValue);
   }
 
-  const isActive = phase !== "idle" && phase !== "scanning" && phase !== "goodbye";
+  const isActive = phase !== "idle" && phase !== "title" && phase !== "scanning" && phase !== "goodbye";
   const cities = selectedState ? getCitiesForState(selectedState) : [];
 
   // ---- Goodbye handler ----
   function handleGoodbye() {
+    cancelThothSpeech();
     setPhase("goodbye");
   }
 
@@ -375,6 +410,7 @@ function App() {
 
   function handleCloseScanner() {
     setShowingFact(false);
+    cancelThothSpeech();
     setPhase("hub");
     setLatestNebo(translateLine("We did it!"));
     setEmoticon(EMOTICONS.happy);
@@ -386,12 +422,10 @@ function App() {
 
   // ---- Hub handlers ----
   function handleHubNasa() {
-    // Placeholder — to be built out later
     window.open("https://apod.nasa.gov/apod/", "_blank");
   }
 
   function handleHubLearn() {
-    // Placeholder — to be built out later
     window.open("https://www.natgeokids.com/uk/discover/science/space/", "_blank");
   }
 
@@ -399,11 +433,49 @@ function App() {
     handleGoodbye();
   }
 
+  // ---- Title screen handler ----
+  function handleTitleStart() {
+    setPhase("idle");
+  }
+
   return (
     <div className="nebo-container">
 
       {/* ============================================================
-       * SHIP LAYERS — always rendered
+       * TITLE SCREEN
+       * ============================================================ */}
+      {phase === "title" && (
+        <div className="title-screen">
+          <div className="title-stars">
+            {Array.from({ length: 40 }).map((_, i) => (
+              <div
+                key={i}
+                className="title-star"
+                style={{
+                  width: 2 + Math.random() * 3,
+                  height: 2 + Math.random() * 3,
+                  top: `${Math.random() * 100}%`,
+                  left: `${Math.random() * 100}%`,
+                  animationDelay: `${Math.random() * 3}s`,
+                  animationDuration: `${2 + Math.random() * 3}s`,
+                }}
+              />
+            ))}
+          </div>
+          <img
+            src="/assets/nebologo.png"
+            alt="Nebo!"
+            className="title-logo"
+            draggable={false}
+          />
+          <button className="title-button" onClick={handleTitleStart}>
+            Let's go!
+          </button>
+        </div>
+      )}
+
+      {/* ============================================================
+       * SHIP LAYERS — always rendered (hidden behind title screen)
        * ============================================================ */}
       <div className="sky-layer">
         <div className="stars">
@@ -431,7 +503,8 @@ function App() {
         src="/assets/nebo.png"
         alt="Nebo the alien"
         className={`nebo-layer ${
-          phase === "idle"     ? "nebo-idle" :
+          phase === "idle" || phase === "title"
+                                 ? "nebo-idle" :
           phase === "naming"   ? "nebo-peeking" :
           phase === "scanning" ? "nebo-scanning" :
                                  "nebo-active"
@@ -441,7 +514,7 @@ function App() {
 
       <img src="/assets/porthole_transp.png" alt="" className="full-layer porthole" draggable={false} />
 
-      {/* Nebo speech bubble — hidden during scanning */}
+      {/* Nebo speech bubble — hidden during scanning and title */}
       {isActive && latestNebo && (
         <div className="nebo-bubble">
           <p className="nebo-bubble-text">{latestNebo}</p>
@@ -463,7 +536,7 @@ function App() {
             <h1 className="scanner-title">Star Scanner</h1>
             <p className="scanner-subtitle">
               {starChartLoading
-                ? `Scanning the skies above ${gameState.city || "New York City"}...`
+                ? `Scanning the skies above ${gameState.city || "us"}...`
                 : `We've located the constellation ${scannerConstellationName}!`
               }
             </p>
@@ -538,9 +611,9 @@ function App() {
       )}
 
       {/* ============================================================
-       * THOTH PANEL — conversation view
+       * THOTH PANEL — conversation view (hidden during title + scanning)
        * ============================================================ */}
-      {phase !== "scanning" && (
+      {phase !== "scanning" && phase !== "title" && (
         <div className="thoth-panel">
 
           <div className={`thoth-avatar ${isActive ? "thoth-avatar-active" : ""}`}>
@@ -549,7 +622,7 @@ function App() {
             )}
           </div>
 
-          <div className="panel-content">
+          <div className={`panel-content ${isActive ? "panel-content-with-avatar" : ""}`}>
 
             {phase === "idle" && (
               <div className="narrative-block">

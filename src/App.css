@@ -1,20 +1,17 @@
 /*
- * NEBO — Styles v3 (Figma-accurate)
+ * NEBO — Styles v4
  *
- * CHANGES from v2:
- * 1. Launch Scanner button: green → solid lavender fill
- * 2. Scanner view: ship layers STAY VISIBLE underneath
- *    - Scanner content is a dark overlay panel (bottom ~80%)
- *    - Nebo repositions to top-right, overlapping porthole edge
- *    - Porthole + dots still visible in background
- *    - "STAR SCANNER" header in yellow-green (#E8FFB0)
- *    - Results box has lime/yellow-green border
- *    - Thoth: small circle avatar (left) + "Thoth:" label + text (right)
- *    - Input at bottom
- * 3. chat-fade-top only shows when chatLog > 4 (JS change)
+ * CHANGES from v3:
+ * 1. Title screen phase with logo + "Let's go!" button
+ * 2. Scanner overlay → full screen (top: 0)
+ * 3. "STAR SCANNER" header → Space Mono
+ * 4. Scanner beam gradient → #E3FF7E
+ * 5. Panel content padding → conditional (small when idle, 48px with avatar)
+ * 6. Nebo bubble text → Fredoka Semi-Bold (600)
+ * 7. Star twinkle animation on title screen
  *
  * Fonts (add to public/index.html <head>):
- * <link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@400;700&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+ * <link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@400;700&family=Fredoka:wght@600&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
  */
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -37,6 +34,74 @@ body {
   overflow: hidden;
   border-radius: 16px;
   background: #000;
+}
+
+/* ============================================================
+ * TITLE SCREEN
+ * ============================================================ */
+.title-screen {
+  position: absolute;
+  inset: 0;
+  z-index: 60;
+  background: #000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 40px;
+}
+
+.title-stars {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.title-star {
+  position: absolute;
+  border-radius: 50%;
+  background: #fff;
+  animation: twinkle 3s ease-in-out infinite;
+}
+
+.title-logo {
+  width: 80%;
+  max-width: 400px;
+  height: auto;
+  z-index: 1;
+  animation: logoFadeIn 1s ease forwards;
+}
+
+.title-button {
+  z-index: 1;
+  background: transparent;
+  border: 2px solid #E3FF7E;
+  border-radius: 100px;
+  padding: 14px 40px;
+  color: #E3FF7E;
+  font-family: 'Space Mono', monospace;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  animation: buttonFadeIn 1s ease 0.5s both;
+}
+
+.title-button:hover {
+  background: rgba(227, 255, 126, 0.12);
+  box-shadow: 0 0 20px rgba(227, 255, 126, 0.25);
+}
+
+@keyframes logoFadeIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes buttonFadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 /* ---- Sky ---- */
@@ -119,6 +184,7 @@ body {
 
 /* ============================================================
  * Nebo speech bubble (hidden during scanning via JS)
+ * — Now uses Fredoka Semi-Bold (600)
  * ============================================================ */
 .nebo-bubble {
   position: absolute;
@@ -136,28 +202,24 @@ body {
 }
 
 .nebo-bubble-text {
-  font-family: 'Comfortaa', cursive;
+  font-family: 'Fredoka', sans-serif;
+  font-weight: 600;
   font-size: 13px;
   color: #1a3300;
   line-height: 1.5;
 }
 
 /* ============================================================
- * SCANNER OVERLAY
- *
- * Ship layers (sky, backwall, fronthull, porthole, dots)
- * remain visible. This overlay covers the bottom ~80% with
- * near-opaque black so hull edges peek through.
- * Nebo is repositioned via .nebo-scanning class above.
+ * SCANNER OVERLAY — now full screen (top: 0)
  * ============================================================ */
 .scanner-overlay {
   position: absolute;
-  top: 18%;
+  top: 0;
   left: 0;
   right: 0;
   bottom: 0;
   z-index: 15;
-  background: rgba(0, 0, 0, 0.92);
+  background: rgba(0, 0, 0, 0.96);
   display: flex;
   flex-direction: column;
   padding: 24px 20px 20px 20px;
@@ -165,14 +227,15 @@ body {
   overflow-y: auto;
 }
 
-/* Header: STAR SCANNER + subtitle */
+/* Header: STAR SCANNER + subtitle — now Space Mono */
 .scanner-header {
   flex-shrink: 0;
   margin-bottom: 14px;
+  margin-top: 50px;
 }
 
 .scanner-title {
-  font-family: 'Comfortaa', cursive;
+  font-family: 'Space Mono', monospace;
   font-weight: 700;
   font-size: 22px;
   color: #E8FFB0;
@@ -227,10 +290,11 @@ body {
   padding: 20px;
 }
 
+/* Scanner beam — updated green to #E3FF7E */
 .scanner-beam {
   width: 80%;
   height: 3px;
-  background: linear-gradient(90deg, transparent, #CCB6FF, #00B709, #CCB6FF, transparent);
+  background: linear-gradient(90deg, transparent, #CCB6FF, #E3FF7E, #CCB6FF, transparent);
   border-radius: 2px;
   animation: scanBeam 2s ease-in-out infinite;
 }
@@ -407,7 +471,8 @@ body {
 }
 
 /* ============================================================
- * Panel content
+ * Panel content — conditional padding
+ * Base: 12px (no avatar). With avatar: 48px.
  * ============================================================ */
 .panel-content {
   display: flex;
@@ -415,8 +480,12 @@ body {
   flex: 1;
   overflow: hidden;
   min-height: 0;
-  padding-top: 48px;
+  padding-top: 12px;
   gap: 8px;
+}
+
+.panel-content-with-avatar {
+  padding-top: 48px;
 }
 
 .narrative-block {
@@ -541,7 +610,7 @@ body {
 }
 
 /* ============================================================
- * Launch Scanner button — solid lavender fill (matches Figma)
+ * Launch Scanner button — solid lavender fill
  * ============================================================ */
 .picker-submit {
   flex: 1;

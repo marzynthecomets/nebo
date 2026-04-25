@@ -438,7 +438,7 @@ export const EMOTICONS = {
   chill:    "´ー｀",
   blank:    "ー_ー",
   excited:  "^O^",
-  scanning: "◎_◎",
+  scanning: "★_★",
 };
 
 // ============================================================
