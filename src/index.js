@@ -2,12 +2,17 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
 import App from './App';
+import PronunciationPreview from './PronunciationPreview';
 import reportWebVitals from './reportWebVitals';
+
+const showPronunciation =
+  typeof window !== 'undefined' &&
+  window.location.search.includes('pronounce');
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
   <React.StrictMode>
-    <App />
+    {showPronunciation ? <PronunciationPreview /> : <App />}
   </React.StrictMode>
 );
 

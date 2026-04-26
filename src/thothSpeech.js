@@ -34,6 +34,56 @@
  */
 
 /**
+ * Phonetic respellings for star names so the speech engine
+ * pronounces them correctly. Only applied to the spoken text —
+ * the on-screen spelling is unchanged.
+ */
+// Lowercase, no hyphens — caps + hyphens trip the engine into spelling out
+// short tokens (e.g. "go-MAY-suh" → "G. O. Maysa"). Running syllables
+// together makes each respelling a single unfamiliar word that gets sounded
+// out phonetically.
+export const STAR_PRONUNCIATIONS = {
+  "Betelgeuse": "betteljooz",
+  "Rigel": "ryejel",
+  "Bellatrix": "belluhtrix",
+  "Sirius": "seereeus",
+  "Adhara": "adharuh",
+  "Wezen": "wezen",
+  "Vega": "vayguh",
+  "Sheliak": "shelleeyak",
+  "Sulafat": "sooluhfaht",
+  "Arcturus": "arktoorus",
+  "Izar": "eyezar",
+  "Muphrid": "moofrid",
+  "Polaris": "pohlairiss",
+  "Kochab": "kohkab",
+  "Pherkad": "fairkod",
+  "Aldebaran": "aldebuhron",
+  "Elnath": "elnoth",
+  "Alcyone": "alsyohnee",
+  "Capella": "kuhpelluh",
+  "Menkalinan": "menkahlihnan",
+  "Mahasim": "muhhahsim",
+  "Procyon": "proseeon",
+  "Gomeisa": "gomaysuh",
+  "Deneb": "deneb",
+  "Albireo": "albeereeoh",
+  "Sadr": "sahder",
+  "Boötes": "bohohteez",
+};
+
+function applyStarPronunciations(text) {
+  let out = text;
+  for (const [name, phonetic] of Object.entries(STAR_PRONUNCIATIONS)) {
+    // Case-insensitive global replace. We don't use \b because some names
+    // (e.g. Boötes) contain non-ASCII letters that break JS word boundaries.
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    out = out.replace(new RegExp(escaped, "gi"), phonetic);
+  }
+  return out;
+}
+
+/**
  * Cancel any currently-speaking Thoth dialogue.
  * Called before each new speak() so lines don't pile up.
  */
@@ -49,7 +99,7 @@ export function cancelThothSpeech() {
  * Fallback voice: "Good News" — pitch 0, rate 1.7
  * Last resort: browser default
  */
-export function speakAsThoth(text) {
+export function speakAsThoth(text, { applyPronunciations = true } = {}) {
   // Don't try to speak empty text
   if (!text || !text.trim()) return;
 
@@ -60,7 +110,8 @@ export function speakAsThoth(text) {
   const voices = speechSynthesis.getVoices();
 
   // Create the utterance — the "package" of text to be spoken
-  const u = new SpeechSynthesisUtterance(text);
+  const spoken = applyPronunciations ? applyStarPronunciations(text) : text;
+  const u = new SpeechSynthesisUtterance(spoken);
 
   // Try to find Superstar (Mars's primary pick for Thoth)
   const superstar = voices.find(v => v.name === "Superstar");
