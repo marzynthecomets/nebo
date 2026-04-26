@@ -438,7 +438,7 @@ export const EMOTICONS = {
   chill:    "´ー｀",
   blank:    "ー_ー",
   excited:  "^O^",
-  scanning: "★_★",
+  scanning: "★‿★",
 };
 
 // ============================================================
@@ -449,12 +449,12 @@ const YES_WORDS = [
   "yes", "yeah", "yep", "yup", "ya", "ye", "yea", "sure",
   "ok", "okay", "yah", "yas", "yess", "yesss", "totally",
   "absolutely", "definitely", "of course", "duh", "mhm",
-  "uh huh", "si", "oui",
+  "uh huh", "si", "oui", "y"
 ];
 
 const NO_WORDS = [
   "no", "nah", "nope", "nay", "never", "not really", "no way",
-  "noo", "nooo", "noooo", "nahh", "nuh uh",
+  "noo", "nooo", "noooo", "nahh", "nuh uh", "n"
 ];
 
 const GREETING_WORDS = [
@@ -544,7 +544,7 @@ export function processMessage(input, state) {
         messages: [
           {
             nebo: "Nib otz~!",
-            thoth: "Hmm, Nebo doesn't think that's your real name. Can you try again?",
+            thoth: "Hmm, are you sure that's your real name? Try again.",
             emoticon: EMOTICONS.sad,
           },
         ],
@@ -559,7 +559,7 @@ export function processMessage(input, state) {
       messages: [
         {
           nebo: `${neboName}! ${neboName}~!`,
-          thoth: `Hello ${name}! This is Nebo, and I'm Thoth, the ship's computer. We just crashed here on Earth. Can you help?`,
+          thoth: `Hello ${name}! I'm Thoth, the ship's computer. This is Nebo. We just crashed here on Earth. Can you help?`,
           emoticon: EMOTICONS.worried,
         },
       ],
@@ -672,7 +672,7 @@ export function processMessage(input, state) {
         messages: [
           {
             nebo: "Nib otz~!",
-            thoth: "That doesn't look like a real city name. Can you try again?",
+            thoth: "Humans have strange city names but that doesn't seem right. Can you try again?",
             emoticon: EMOTICONS.sad,
           },
         ],
@@ -809,15 +809,12 @@ export function processMessage(input, state) {
 // ============================================================
 
 export function processCitySelection(cityName, state) {
-  const timeMsg = isDaytime()
-    ? "Even though it's daytime, the stars are still shining bright above us. It's just hard to see them without a special scanner!"
-    : "The stars are shining bright above us!";
 
   return {
     messages: [
       {
         nebo: "Miinii~!",
-        thoth: `Great, launching the scanner above ${cityName} now! ${timeMsg}`,
+        thoth: `Scanning the skies above ${cityName}!`,
         emoticon: EMOTICONS.scanning,
       },
     ],
@@ -836,11 +833,11 @@ export function processSkip(state) {
     messages: [
       {
         nebo: "Noowoo!",
-        thoth: "All good, we can launch the scanner without it.",
-        emoticon: EMOTICONS.chill,
+        thoth: "Scanning the skies above us!",
+        emoticon: EMOTICONS.scanning,
       },
     ],
-    newState: { ...state, stage: 4, city: "New York City", subStage: null },
+    newState: { ...state, stage: 4, city: "", subStage: null },
     expectingInput: null,
     showScanResult: true,
   };

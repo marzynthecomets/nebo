@@ -15,19 +15,19 @@ import {
 } from "./neboEngine";
 import { STATE_NAMES, getCitiesForState, getCoordinates, DEFAULT_LOCATION } from "./usCities";
 import { speakAsThoth, cancelThothSpeech } from "./thothSpeech";
+import { playNeboChirps, cancelNeboChirps, startScanPings, stopScanPings, playScanPing } from "./neboChirps";  // ← NEW: Nebo's voice!
 import "./App.css";
 
 /*
  * ============================================================
- * NEBO — App v4
+ * NEBO — App v4 (Audio Integration)
  * ============================================================
  *
  * Changes from v3:
- * - Title screen with logo + "Let's go!" button
- * - Conditional panel padding (smaller when idle, 48px with avatar)
- * - Skip city defaults to "Scanning the skies above us!"
- * - Thoth speech wired in (speakAsThoth on new dialogue)
- * - Scanning emoticon updated to ★_★
+ * - ★ Thoth speech (Web Speech API / Polly-ready)
+ * - ★ Nebo chirps (Web Audio API synthesizer)
+ * - ★ Sequential audio: Nebo chirps first → Thoth speaks after
+ * - Dialogue tweaks (scanner launch, back-to-constellation)
  * ============================================================
  */
 
@@ -77,6 +77,7 @@ function App() {
 
   // Scanner state
   const [scannerDialogue, setScannerDialogue] = useState("");
+  const [scannerSpeech, setScannerSpeech] = useState("");
   const [scannerStars, setScannerStars] = useState([]);
   const [scannerConstellationName, setScannerConstellationName] = useState("");
   const [showingFact, setShowingFact] = useState(false);
@@ -92,37 +93,39 @@ function App() {
     }
   }, [chatLog]);
 
-  // ---- Thoth speech: speak new chat log entries ----
-  const lastSpokenIndexRef = useRef(-1);
-
+  // ============================================================
+  // ★ THOTH SPEECH — Chat log
+  // ============================================================
+  // Watches chatLog. When a new Thoth message appears, speaks it.
+  // NOTE: Thoth's text only gets added to chatLog AFTER Nebo's
+  // chirps finish (see applyResult), so the timing is:
+  // Nebo chirps → Thoth text appears → Thoth speaks
+  // ============================================================
   useEffect(() => {
-    if (chatLog.length === 0) return;
-
-    // Find the latest bot message
-    const latestBotIndex = chatLog.length - 1;
-    const latestEntry = chatLog[latestBotIndex];
-
-    // Only speak bot messages, and only if we haven't spoken this one yet
-    if (
-      latestEntry.type === "bot" &&
-      latestEntry.thoth &&
-      latestBotIndex > lastSpokenIndexRef.current
-    ) {
-      speakAsThoth(latestEntry.thoth);
-      lastSpokenIndexRef.current = latestBotIndex;
+    const last = chatLog[chatLog.length - 1];
+    if (last && last.type === "bot") {
+      speakAsThoth(last.thoth);
     }
   }, [chatLog]);
 
-  // ---- Thoth speech: speak scanner dialogue changes ----
+  // ============================================================
+  // ★ THOTH SPEECH — Scanner dialogue
+  // ============================================================
   useEffect(() => {
-    if (scannerDialogue && phase === "scanning") {
-      speakAsThoth(scannerDialogue);
+    if (scannerSpeech) {
+      speakAsThoth(scannerSpeech);
     }
-  }, [scannerDialogue, phase]);
+  }, [scannerSpeech]);
 
-  // ---- Cancel speech on unmount ----
+  // ============================================================
+  // ★ CLEANUP — Stop all audio when leaving the page
+  // ============================================================
   useEffect(() => {
-    return () => cancelThothSpeech();
+    return () => {
+      cancelThothSpeech();
+      cancelNeboChirps();
+      stopScanPings();
+    };
   }, []);
 
   // ---- Start loading facts rotation ----
@@ -134,7 +137,6 @@ function App() {
 
     function scheduleNext() {
       const currentFact = facts[index];
-      // Longer facts get more reading time
       const delay = currentFact.length > 80 ? 5500 : 4000;
       loadingIntervalRef.current = setTimeout(() => {
         index = (index + 1) % facts.length;
@@ -152,27 +154,55 @@ function App() {
     }
   }, []);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => stopLoadingFacts();
   }, [stopLoadingFacts]);
 
-  // ---- Helper: apply engine result to UI state ----
-  function applyResult(result, userText = null) {
+  // ============================================================
+  // ★ SEQUENTIAL AUDIO — The heart of the Nebo/Thoth performance
+  // ============================================================
+  //
+  // This is the key change. Instead of dumping everything at once:
+  //
+  // 1. Add user's message to chat (if any)
+  // 2. Update Nebo's bubble + emoticon
+  // 3. Play Nebo's chirps (mapped to mood + text length)
+  // 4. Wait for chirps to finish
+  // 5. THEN add Thoth's text to chatLog (which triggers speech)
+  // 6. Update game state and phase
+  //
+  // Mars — this uses async/await. "await" just means "pause here
+  // until this thing finishes." Summer topic!
+  // ============================================================
+  async function applyResult(result, userText = null) {
+    // Step 1: Add user's message to chat immediately (if they typed something)
+    if (userText) {
+      setChatLog((prev) => [...prev, { type: "user", text: userText }]);
+    }
+
+    // Step 2: Update Nebo's bubble and emoticon right away
     const lastNebo = [...result.messages].reverse().find((m) => m.nebo);
     if (lastNebo) setLatestNebo(lastNebo.nebo);
 
     const lastEmoticon = [...result.messages].reverse().find((m) => m.emoticon);
+    const currentEmoticon = lastEmoticon ? lastEmoticon.emoticon : emoticon;
     if (lastEmoticon) setEmoticon(lastEmoticon.emoticon);
 
+    // Step 3: Play Nebo's chirps and wait for them to finish
+    if (lastNebo && lastNebo.nebo) {
+      await playNeboChirps(lastNebo.nebo, currentEmoticon);
+    }
+
+    // Step 4: NOW add Thoth's text to chatLog (triggers speech via useEffect)
     setChatLog((prev) => [
-      ...(userText ? [...prev, { type: "user", text: userText }] : prev),
+      ...prev,
       ...result.messages.map((m) => ({ type: "bot", thoth: m.thoth })),
     ]);
 
+    // Step 5: Update game state
     setGameState(result.newState);
 
-    // Phase transitions based on engine signals
+    // Step 6: Phase transitions
     if (result.showCityPicker) {
       setPhase("picking");
     } else if (result.showScanResult) {
@@ -189,16 +219,17 @@ function App() {
     setPhase("scanning");
     setStarChartLoading(true);
     setScannerDialogue("");
+    setScannerSpeech("");
     setStarChartUrl("");
     setShowingFact(false);
 
-    // Cancel any ongoing speech before scanning
+    // Cancel any ongoing audio
     cancelThothSpeech();
+    cancelNeboChirps();
 
-    // Start the loading facts rotation
     startLoadingFacts();
+    startScanPings();  // ★ Sonar pings while scanning
 
-    // Look up coordinates
     let lat = DEFAULT_LOCATION.lat;
     let lon = DEFAULT_LOCATION.lon;
 
@@ -213,22 +244,21 @@ function App() {
       }
     }
 
-    // Pick a seasonal constellation (avoiding repeats)
     const constellationId = pickConstellation(
       state.city || "New York City",
       state.scanCount,
       state.seenConstellations || []
     );
 
-    // If all constellations seen, use a fallback
     const chartConstellation = constellationId || "umi";
-
-    // Get stars for this constellation
     const stars = getStarsForConstellation(chartConstellation);
     setScannerStars(stars);
     setScannerConstellationName(getConstellationName(chartConstellation));
 
-    // Call the Netlify function with timeout
+    // ★ Minimum loading time so kids see a few space facts
+    // The API fetch and the timer run in parallel — we wait for BOTH
+    const minLoadingTime = new Promise((resolve) => setTimeout(resolve, 8000));
+
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), API_TIMEOUT);
@@ -249,27 +279,36 @@ function App() {
       }
     } catch (err) {
       if (err.name === "AbortError") {
-        console.warn("Star chart API timed out after 15s, using fallback");
+        console.warn("Star chart API timed out, using fallback");
       } else {
         console.warn("Star chart fetch failed:", err);
       }
       setStarChartUrl(FALLBACK_CHART_URL);
     }
 
-    // Stop the loading facts
+    // Wait for minimum loading time even if API was fast
+    await minLoadingTime;
+
     stopLoadingFacts();
+    stopScanPings();  // ★ Stop sonar pings
     setStarChartLoading(false);
 
-    // Tell the engine the scan is done
     const scanDone = processScanComplete(state, stars, chartConstellation);
     const lastNebo = [...scanDone.messages].reverse().find((m) => m.nebo);
     if (lastNebo) setLatestNebo(lastNebo.nebo);
     const lastEmoticon = [...scanDone.messages].reverse().find((m) => m.emoticon);
     if (lastEmoticon) setEmoticon(lastEmoticon.emoticon);
 
-    setScannerDialogue(
-      scanDone.messages.map((m) => m.thoth).join(" ")
-    );
+    // ★ Play Nebo's chirps before showing scanner dialogue
+    if (lastNebo && lastNebo.nebo) {
+      const currentEmoticon = lastEmoticon ? lastEmoticon.emoticon : EMOTICONS.excited;
+      await playNeboChirps(lastNebo.nebo, currentEmoticon);
+    }
+
+    const constellationAnnouncement = `We've located the constellation ${getConstellationName(chartConstellation)}!`;
+    const starPickerLine = scanDone.messages.map((m) => m.thoth).join(" ");
+    setScannerDialogue(starPickerLine);
+    setScannerSpeech(`${constellationAnnouncement} ${starPickerLine}`);
 
     setGameState(scanDone.newState);
   }
@@ -280,19 +319,26 @@ function App() {
     if (!trimmed) return;
     setInputValue("");
 
-    // Expand city shorthands anywhere in the flow
     const expanded = expandCityShorthand(trimmed);
     if (expanded && (gameState.stage === 2 || gameState.stage === 3)) {
       trimmed = expanded;
     }
 
     if (phase === "idle") {
+      // ★ First message — play chirps then show Thoth's greeting
       const result = processMessage("hello", INITIAL_STATE);
-      setLatestNebo(result.messages[0]?.nebo || "");
-      setEmoticon(result.messages[0]?.emoticon || EMOTICONS.neutral);
-      setChatLog(result.messages.map((m) => ({ type: "bot", thoth: m.thoth })));
-      setGameState(result.newState);
+      const neboText = result.messages[0]?.nebo || "";
+      const emoText = result.messages[0]?.emoticon || EMOTICONS.neutral;
+
+      setLatestNebo(neboText);
+      setEmoticon(emoText);
       setPhase("naming");
+
+      // Play chirps, then add Thoth's text
+      playNeboChirps(neboText, emoText).then(() => {
+        setChatLog(result.messages.map((m) => ({ type: "bot", thoth: m.thoth })));
+        setGameState(result.newState);
+      });
       return;
     }
 
@@ -304,20 +350,20 @@ function App() {
 
     // Scanning phase — star name, yes/no, or random input
     if (phase === "scanning") {
-      // First check for star name match (with typo tolerance)
       const starNames = scannerStars.map((s) => s.name);
       const matchedStar = fuzzyMatch(trimmed, starNames);
 
       if (matchedStar) {
         const star = scannerStars.find((s) => s.name === matchedStar);
         setScannerDialogue(star.fact);
+        setScannerSpeech(star.fact);
+        setSelectedStarName(star.name);
         setEmoticon(EMOTICONS.excited);
         setShowingFact(true);
         setGameState((prev) => ({ ...prev, stage: 5 }));
         return;
       }
 
-      // Then check yes/no
       const result = processMessage(trimmed, gameState);
 
       if (result.showScanResult) {
@@ -325,28 +371,57 @@ function App() {
         return;
       }
 
-      // If stage changed away from scanning, exit to chatting
       if (result.newState.stage !== 5 && result.newState.stage !== 4) {
         const lastNebo = [...result.messages].reverse().find((m) => m.nebo);
         if (lastNebo) setLatestNebo(lastNebo.nebo);
         const lastEmoticon = [...result.messages].reverse().find((m) => m.emoticon);
         if (lastEmoticon) setEmoticon(lastEmoticon.emoticon);
 
-        setChatLog((prev) => [
-          ...prev,
-          { type: "user", text: trimmed },
-          ...result.messages.map((m) => ({ type: "bot", thoth: m.thoth })),
-        ]);
+        // ★ Sequential: chirps first, then Thoth
+        const neboText = lastNebo ? lastNebo.nebo : "";
+        const emoText = lastEmoticon ? lastEmoticon.emoticon : emoticon;
+
+        if (neboText) {
+          playNeboChirps(neboText, emoText).then(() => {
+            setChatLog((prev) => [
+              ...prev,
+              { type: "user", text: trimmed },
+              ...result.messages.map((m) => ({ type: "bot", thoth: m.thoth })),
+            ]);
+          });
+        } else {
+          setChatLog((prev) => [
+            ...prev,
+            { type: "user", text: trimmed },
+            ...result.messages.map((m) => ({ type: "bot", thoth: m.thoth })),
+          ]);
+        }
+
         setGameState(result.newState);
         setPhase("chatting");
         return;
       }
 
-      // Fallback: update scanner dialogue with the response
+      // Scanner dialogue update — with chirps
       const thothLine = result.messages.map((m) => m.thoth).join(" ");
-      setScannerDialogue(thothLine);
+      const lastNebo2 = [...result.messages].reverse().find((m) => m.nebo);
       const lastEmoticon2 = [...result.messages].reverse().find((m) => m.emoticon);
       if (lastEmoticon2) setEmoticon(lastEmoticon2.emoticon);
+      if (lastNebo2) setLatestNebo(lastNebo2.nebo);
+
+      const neboText = lastNebo2 ? lastNebo2.nebo : "";
+      const emoText = lastEmoticon2 ? lastEmoticon2.emoticon : emoticon;
+
+      if (neboText) {
+        playNeboChirps(neboText, emoText).then(() => {
+          setScannerDialogue(thothLine);
+          setScannerSpeech(thothLine);
+        });
+      } else {
+        setScannerDialogue(thothLine);
+        setScannerSpeech(thothLine);
+      }
+
       setGameState(result.newState);
       return;
     }
@@ -385,22 +460,40 @@ function App() {
     if (e.key === "Enter") handleSend(inputValue);
   }
 
-  const isActive = phase !== "idle" && phase !== "title" && phase !== "scanning" && phase !== "goodbye";
+  const isActive = phase !== "title" && phase !== "idle" && phase !== "scanning" && phase !== "goodbye";
   const cities = selectedState ? getCitiesForState(selectedState) : [];
 
   // ---- Goodbye handler ----
-  function handleGoodbye() {
+  async function handleGoodbye() {
     cancelThothSpeech();
-    setPhase("goodbye");
+    cancelNeboChirps();
+    stopScanPings();
+
+    // Nebo says goodbye first
+    const neboGoodbye = translateLine("Goodbye friend!");
+    setLatestNebo(neboGoodbye);
+    setEmoticon(EMOTICONS.happy);
+
+    // Play Nebo's goodbye chirps
+    await playNeboChirps(neboGoodbye, EMOTICONS.happy);
+
+    // Thoth says goodbye
+    setChatLog((prev) => [
+      ...prev,
+      { type: "bot", thoth: "Goodbye! The stars will always shine bright for you." },
+    ]);
+
+    // Give Thoth a moment to speak, then fade
+    setTimeout(() => {
+      setPhase("goodbye");
+    }, 3000);
   }
 
   // ---- Scanner navigation handlers ----
   function handleBackToConstellation() {
     setShowingFact(false);
-    const starNames = scannerStars.map((s) => s.name).join(", ");
-    setScannerDialogue(
-      `Learning about the stars will help us get home! Which star do you want to learn more about? ${starNames}`
-    );
+    setScannerDialogue("Let's learn about another star!");
+    setScannerSpeech("Let's learn about another star!");
   }
 
   function handleNewScan() {
@@ -409,8 +502,10 @@ function App() {
   }
 
   function handleCloseScanner() {
-    setShowingFact(false);
     cancelThothSpeech();
+    cancelNeboChirps();
+    stopScanPings();
+    setShowingFact(false);
     setPhase("hub");
     setLatestNebo(translateLine("We did it!"));
     setEmoticon(EMOTICONS.happy);
@@ -433,16 +528,11 @@ function App() {
     handleGoodbye();
   }
 
-  // ---- Title screen handler ----
-  function handleTitleStart() {
-    setPhase("idle");
-  }
-
   return (
     <div className="nebo-container">
 
       {/* ============================================================
-       * TITLE SCREEN
+       * TITLE SCREEN — logo + twinkling stars + CTA
        * ============================================================ */}
       {phase === "title" && (
         <div className="title-screen">
@@ -452,8 +542,8 @@ function App() {
                 key={i}
                 className="title-star"
                 style={{
-                  width: 2 + Math.random() * 3,
-                  height: 2 + Math.random() * 3,
+                  width: 1.5 + Math.random() * 2.5,
+                  height: 1.5 + Math.random() * 2.5,
                   top: `${Math.random() * 100}%`,
                   left: `${Math.random() * 100}%`,
                   animationDelay: `${Math.random() * 3}s`,
@@ -462,20 +552,15 @@ function App() {
               />
             ))}
           </div>
-          <img
-            src="/assets/nebologo.png"
-            alt="Nebo!"
-            className="title-logo"
-            draggable={false}
-          />
-          <button className="title-button" onClick={handleTitleStart}>
-            Let's go!
+          <img src="/assets/nebologo.png" alt="Nebo!" className="title-logo" draggable={false} />
+          <button className="title-button" onClick={() => setPhase("idle")}>
+            Let's get <strong>star</strong>ted!
           </button>
         </div>
       )}
 
       {/* ============================================================
-       * SHIP LAYERS — always rendered (hidden behind title screen)
+       * SHIP LAYERS — always rendered
        * ============================================================ */}
       <div className="sky-layer">
         <div className="stars">
@@ -497,14 +582,13 @@ function App() {
       </div>
 
       <img src="/assets/backwall.png" alt="" className="full-layer" draggable={false} />
-      <img src="/assets/fronthull.png" alt="" className="full-layer" draggable={false} />
+      <img src="/assets/fronthull.png" alt="" className="full-layer fronthull" draggable={false} />
 
       <img
         src="/assets/nebo.png"
         alt="Nebo the alien"
         className={`nebo-layer ${
-          phase === "idle" || phase === "title"
-                                 ? "nebo-idle" :
+          phase === "idle"     ? "nebo-idle" :
           phase === "naming"   ? "nebo-peeking" :
           phase === "scanning" ? "nebo-scanning" :
                                  "nebo-active"
@@ -514,7 +598,7 @@ function App() {
 
       <img src="/assets/porthole_transp.png" alt="" className="full-layer porthole" draggable={false} />
 
-      {/* Nebo speech bubble — hidden during scanning and title */}
+      {/* Nebo speech bubble — hidden during scanning */}
       {isActive && latestNebo && (
         <div className="nebo-bubble">
           <p className="nebo-bubble-text">{latestNebo}</p>
@@ -526,7 +610,6 @@ function App() {
        * ============================================================ */}
       {phase === "scanning" && (
         <>
-          {/* Close button — sits in ship area ABOVE the overlay */}
           <button className="scanner-close-button" onClick={handleCloseScanner}>
             close scanner
           </button>
@@ -545,7 +628,11 @@ function App() {
           <div className={`scanner-results-box ${starChartLoading ? "loading" : ""}`}>
             {starChartLoading ? (
               <div className="scanner-loading">
-                <div className="scanner-beam" />
+                <div
+                  className="scanner-beam"
+                  onAnimationStart={playScanPing}
+                  onAnimationIteration={playScanPing}
+                />
                 <p className="scanner-beam-text">{loadingFact || "Scanning the sky..."}</p>
               </div>
             ) : starChartUrl ? (
@@ -577,7 +664,6 @@ function App() {
             </div>
           </div>
 
-          {/* Star picker buttons OR navigation buttons */}
           {showingFact ? (
             <div className="scanner-nav-buttons">
               <button className="scanner-nav-button" onClick={handleBackToConstellation}>
@@ -595,6 +681,7 @@ function App() {
                   className="scanner-star-button"
                   onClick={() => {
                     setScannerDialogue(star.fact);
+                    setScannerSpeech(star.fact);
                     setSelectedStarName(star.name);
                     setEmoticon(EMOTICONS.excited);
                     setShowingFact(true);
@@ -611,9 +698,9 @@ function App() {
       )}
 
       {/* ============================================================
-       * THOTH PANEL — conversation view (hidden during title + scanning)
+       * THOTH PANEL — conversation view
        * ============================================================ */}
-      {phase !== "scanning" && phase !== "title" && (
+      {phase !== "title" && phase !== "scanning" && (
         <div className="thoth-panel">
 
           <div className={`thoth-avatar ${isActive ? "thoth-avatar-active" : ""}`}>
@@ -622,12 +709,12 @@ function App() {
             )}
           </div>
 
-          <div className={`panel-content ${isActive ? "panel-content-with-avatar" : ""}`}>
+          <div className="panel-content">
 
             {phase === "idle" && (
               <div className="narrative-block">
                 <p className="narrative-text">
-                  You find a spaceship, and a mysterious glowing creature looks out at you.
+                  You find a spaceship, and a mysterious glowing creature peeking out at you.
                 </p>
                 <p className="narrative-prompt">Say hello?</p>
               </div>
@@ -635,7 +722,7 @@ function App() {
 
             {isActive && (
               <div className="chat-log-wrapper">
-                {chatLog.length > 4 && <div className="chat-fade-top" />}
+                {chatLog.length > 1 && <div className="chat-fade-top" />}
                 <div className="chat-log">
                   {chatLog.map((entry, i) =>
                     entry.type === "user"
