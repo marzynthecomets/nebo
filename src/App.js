@@ -36,7 +36,7 @@ import "./App.css";
 const FALLBACK_CHART_URL = `${process.env.PUBLIC_URL}/assets/fallback-starchart.png`;
 
 // API timeout in milliseconds
-const API_TIMEOUT = 20000;
+const API_TIMEOUT = 30000;
 
 function App() {
   const [phase, setPhase] = useState("title");
@@ -102,6 +102,14 @@ function App() {
       cancelNeboChirps();
       stopScanPings();
     };
+  }, []);
+
+  // Pre-warm the Netlify function so the kid's first scan doesn't cold-start.
+  // Fires a paramless fetch — the function returns 400 instantly without
+  // calling AstronomyAPI (no quota used), but the Node runtime is now hot.
+  useEffect(() => {
+    fetch("https://neboscanner.netlify.app/.netlify/functions/star-scan")
+      .catch(() => {});
   }, []);
 
   // ---- Loading facts rotation ----
