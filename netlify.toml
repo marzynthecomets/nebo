@@ -1,0 +1,15 @@
+# Netlify config — this site only serves the star-scan serverless function.
+# The actual Nebo app is hosted on GitHub Pages at:
+#   https://marzynthecomets.github.io/nebo/
+#
+# We override the auto-detected CRA build because we don't want Netlify
+# building/serving the React app (it'd just be a redundant copy of the
+# GitHub Pages site).
+
+[build]
+  command = "echo 'Functions-only site — skipping app build'"
+  publish = "netlify-public"
+  functions = "netlify/functions"
+
+[build.environment]
+  CI = "false"
