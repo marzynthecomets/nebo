@@ -35,6 +35,16 @@
 // We keep one AudioContext around and reuse it
 let audioContext = null;
 
+// Silent MP3 played in a hidden looping <audio> element. When this is
+// playing, iOS treats the page as an active audio session in "playback"
+// mode, which makes Web Audio output (chirps, pings) bypass the hardware
+// silent switch — same trick streaming apps use. Without it, the silent
+// switch mutes Nebo's chirps even though Thoth's voice still plays.
+const SILENT_MP3 =
+  "data:audio/mpeg;base64,//uQxAADB8AHSfxhAAA9AAACkAAAAExBTUUzLjk5LjVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//uQxFGADyMlSPgkAANvkek/D5AAVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//uQxKQAB+yzG/QXgAEFmqJ+gvAAVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVU=";
+
+let silentLoopElement = null;
+
 // Track the current chirp sequence so we can cancel it
 let currentChirpTimeout = null;
 let isChirping = false;
@@ -77,15 +87,19 @@ async function ensureRunning(ctx) {
  * inside a user gesture handler (e.g. the Start button click) — after
  * that, audio works from anywhere including useEffect and async chains.
  *
- * Plays a brief silent oscillator (non-zero duration) which iOS Safari
- * recognizes as real audio playback, satisfying the gesture-required rule.
+ * Does three things:
+ * 1. Creates the AudioContext (gesture-required on iOS)
+ * 2. Plays a brief silent oscillator (real audio playback gesture-unlock)
+ * 3. Starts a hidden silent MP3 loop — this puts iOS into "playback"
+ *    audio session mode so subsequent Web Audio output ignores the
+ *    hardware silent switch (otherwise chirps/pings are muted in
+ *    silent mode while Web Speech still plays).
  */
 export function unlockAudio() {
   try {
     const ctx = getAudioContext();
 
-    // Brief silent oscillator — more reliable than a 1-sample buffer.
-    // iOS Safari needs the audio source to have non-trivial duration.
+    // (1+2) Brief silent oscillator inside the gesture
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     gain.gain.value = 0;
@@ -97,6 +111,21 @@ export function unlockAudio() {
     if (ctx.state === "suspended") {
       ctx.resume();
     }
+
+    // (3) Silent MP3 loop — bypasses iOS silent switch for Web Audio
+    if (!silentLoopElement) {
+      silentLoopElement = document.createElement("audio");
+      silentLoopElement.src = SILENT_MP3;
+      silentLoopElement.loop = true;
+      silentLoopElement.preload = "auto";
+      silentLoopElement.setAttribute("playsinline", "true");
+      // Off-screen but in DOM so iOS treats it as a real audio element
+      silentLoopElement.style.display = "none";
+      document.body.appendChild(silentLoopElement);
+    }
+    silentLoopElement.play().catch(() => {
+      // play() can reject if gesture was lost — best-effort, no fallback
+    });
   } catch (e) {
     // best-effort — failure here doesn't block app
   }
