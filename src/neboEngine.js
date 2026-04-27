@@ -1096,6 +1096,7 @@ export function processStateSelection(stateName, state) {
     newState: { ...state, stage: 3, location: stateName, subStage: "bortle" },
     expectingInput: "yesno",
     showBortleButtons: true,
+    clearChatLog: true,
   };
 }
 

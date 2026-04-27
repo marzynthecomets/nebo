@@ -145,7 +145,11 @@ function App() {
 
   // ★ SEQUENTIAL AUDIO
   async function applyResult(result, userText = null) {
-    if (userText) {
+    // Some flows (e.g. the Bortle interstitial) want to wipe the chat log
+    // first so the long new message isn't drowning in earlier dialogue.
+    if (result.clearChatLog) {
+      setChatLog(userText ? [{ type: "user", text: userText }] : []);
+    } else if (userText) {
       setChatLog((prev) => [...prev, { type: "user", text: userText }]);
     }
 
