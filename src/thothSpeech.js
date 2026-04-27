@@ -88,6 +88,25 @@ function applySpeechReplacements(text) {
   return text.replace(/\((\d+)\s*-\s*(\d+)\)/g, "$1 through $2");
 }
 
+// Cache voices — getVoices() returns [] on first call in Chrome/Safari before
+// the voiceschanged event fires, which would make the first Thoth line fall
+// through to the browser default voice instead of Superstar.
+let cachedVoices = [];
+function loadVoices() {
+  if (typeof speechSynthesis !== "undefined") {
+    const v = speechSynthesis.getVoices();
+    if (v.length > 0) cachedVoices = v;
+  }
+}
+if (typeof speechSynthesis !== "undefined") {
+  loadVoices();
+  if (typeof speechSynthesis.addEventListener === "function") {
+    speechSynthesis.addEventListener("voiceschanged", loadVoices);
+  } else {
+    speechSynthesis.onvoiceschanged = loadVoices;
+  }
+}
+
 /**
  * Cancel any currently-speaking Thoth dialogue.
  * Called before each new speak() so lines don't pile up.
@@ -111,8 +130,10 @@ export function speakAsThoth(text, { applyPronunciations = true } = {}) {
   // Cancel anything currently being spoken
   cancelThothSpeech();
 
-  // Get all available voices from the browser
-  const voices = speechSynthesis.getVoices();
+  // Get all available voices from the browser — prefer cached voices since
+  // getVoices() returns [] on first call in Chrome/Safari before the
+  // voiceschanged event fires.
+  const voices = cachedVoices.length > 0 ? cachedVoices : speechSynthesis.getVoices();
 
   // Create the utterance — the "package" of text to be spoken
   const withPronunciations = applyPronunciations ? applyStarPronunciations(text) : text;

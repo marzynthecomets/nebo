@@ -948,6 +948,31 @@ export function processMessage(input, state) {
 
   // ---- Stage 5: scan results — type star name or yes/no ----
   if (stage === 5) {
+    // Try star-name fuzzy match FIRST so YES_WORDS like "true"/"facts" don't
+    // hijack a kid trying to type a star name (yes/no fall through if no match)
+    const trimmed = input.trim();
+    const currentStars = state.currentConstellation
+      ? getStarsForConstellation(state.currentConstellation)
+      : [];
+    const starNames = currentStars.map((s) => s.name);
+    const matched = trimmed ? fuzzyMatch(trimmed, starNames) : null;
+
+    if (matched) {
+      const star = currentStars.find((s) => s.name === matched);
+      return {
+        messages: [
+          {
+            nebo: toNebo(matched) + "!",
+            thoth: star.fact + " Want to scan again?",
+            emoticon: EMOTICONS.excited,
+          },
+        ],
+        newState: state,
+        expectingInput: "text",
+        starFactShown: true,
+      };
+    }
+
     if (intent === "yes") {
       const nextConstellation = pickConstellation(
         location || "New York",
@@ -995,37 +1020,6 @@ export function processMessage(input, state) {
         ],
         newState: { ...state, stage: 91 },
         expectingInput: null,
-      };
-    }
-
-    // Check if they typed a star name (with typo tolerance)
-    if (intent === "other") {
-      const currentStars = state.currentConstellation
-        ? getStarsForConstellation(state.currentConstellation)
-        : [];
-      const starNames = currentStars.map((s) => s.name);
-      const matched = fuzzyMatch(input.trim(), starNames);
-
-      if (matched) {
-        const star = currentStars.find((s) => s.name === matched);
-        return {
-          messages: [
-            {
-              nebo: toNebo(matched) + "!",
-              thoth: star.fact + " Want to scan again?",
-              emoticon: EMOTICONS.excited,
-            },
-          ],
-          newState: state,
-          expectingInput: "text",
-          starFactShown: true,
-        };
-      }
-
-      return {
-        messages: [FALLBACK_RESPONSES[5]],
-        newState: state,
-        expectingInput: "text",
       };
     }
 

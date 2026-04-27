@@ -33,7 +33,7 @@ import "./App.css";
  */
 
 // Fallback star chart URL
-const FALLBACK_CHART_URL = "/assets/fallback-starchart.png";
+const FALLBACK_CHART_URL = `${process.env.PUBLIC_URL}/assets/fallback-starchart.png`;
 
 // API timeout in milliseconds
 const API_TIMEOUT = 20000;
@@ -57,6 +57,10 @@ function App() {
   const [loadingFact, setLoadingFact] = useState("");
   const loadingFactsRef = useRef([]);
   const loadingIntervalRef = useRef(null);
+
+  // Lock to prevent double-click on plea/bortle/ready/waiting buttons from
+  // firing handlePlea twice with stale gameState
+  const isHandlingChoiceRef = useRef(false);
 
   // Scanner state
   const [scannerDialogue, setScannerDialogue] = useState("");
@@ -391,9 +395,15 @@ function App() {
     setSelectedState("");
   }
 
-  function handlePlea(answer, label) {
-    const result = processMessage(answer, gameState);
-    applyResult(result, label);
+  async function handlePlea(answer, label) {
+    if (isHandlingChoiceRef.current) return;
+    isHandlingChoiceRef.current = true;
+    try {
+      const result = processMessage(answer, gameState);
+      await applyResult(result, label);
+    } finally {
+      isHandlingChoiceRef.current = false;
+    }
   }
 
   function handleKeyDown(e) {
@@ -484,7 +494,7 @@ function App() {
               />
             ))}
           </div>
-          <img src="/assets/nebologo.png" alt="Nebo!" className="title-logo" draggable={false} />
+          <img src={`${process.env.PUBLIC_URL}/assets/nebologo.png`} alt="Nebo!" className="title-logo" draggable={false} />
           <button className="title-button" onClick={() => setPhase("idle")}>
             Let's get <strong>star</strong>ted!
           </button>
@@ -511,11 +521,11 @@ function App() {
         </div>
       </div>
 
-      <img src="/assets/backwall.png" alt="" className="full-layer" draggable={false} />
-      <img src="/assets/fronthull.png" alt="" className="full-layer fronthull" draggable={false} />
+      <img src={`${process.env.PUBLIC_URL}/assets/backwall.png`} alt="" className="full-layer" draggable={false} />
+      <img src={`${process.env.PUBLIC_URL}/assets/fronthull.png`} alt="" className="full-layer fronthull" draggable={false} />
 
       <img
-        src="/assets/nebo.png"
+        src={`${process.env.PUBLIC_URL}/assets/nebo.png`}
         alt="Nebo the alien"
         className={`nebo-layer ${
           phase === "idle"     ? "nebo-idle" :
@@ -525,7 +535,7 @@ function App() {
         draggable={false}
       />
 
-      <img src="/assets/porthole_transp.png" alt="" className="full-layer porthole" draggable={false} />
+      <img src={`${process.env.PUBLIC_URL}/assets/porthole_transp.png`} alt="" className="full-layer porthole" draggable={false} />
 
       {/* Nebo speech bubble */}
       {isActive && latestNebo && (
