@@ -105,10 +105,11 @@ function App() {
   }, []);
 
   // Pre-warm the Netlify function so the kid's first scan doesn't cold-start.
-  // Fires a paramless fetch — the function returns 400 instantly without
-  // calling AstronomyAPI (no quota used), but the Node runtime is now hot.
+  // The ?warmup=1 short-circuit returns 200 instantly without calling
+  // AstronomyAPI (no quota used) and without polluting Netlify's function
+  // error stats.
   useEffect(() => {
-    fetch("https://neboscanner.netlify.app/.netlify/functions/star-scan")
+    fetch("https://neboscanner.netlify.app/.netlify/functions/star-scan?warmup=1")
       .catch(() => {});
   }, []);
 
