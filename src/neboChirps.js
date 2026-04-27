@@ -56,6 +56,27 @@ function getAudioContext() {
 }
 
 /**
+ * Unlock audio playback on iOS Safari. Must be called synchronously
+ * inside a user gesture handler (e.g. the Start button click) — after
+ * that, audio works from anywhere including useEffect and async chains.
+ *
+ * Creates the AudioContext and plays a 1-sample silent buffer to satisfy
+ * iOS's "must play audio inside a gesture" rule.
+ */
+export function unlockAudio() {
+  try {
+    const ctx = getAudioContext();
+    const buffer = ctx.createBuffer(1, 1, 22050);
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(ctx.destination);
+    source.start(0);
+  } catch (e) {
+    // best-effort — failure here doesn't block app
+  }
+}
+
+/**
  * Mood profiles — each mood defines how Nebo's chirps sound.
  *
  * freqLow/freqHigh: the pitch range (in Hz) chirps are picked from

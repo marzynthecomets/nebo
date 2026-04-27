@@ -116,6 +116,23 @@ export function cancelThothSpeech() {
 }
 
 /**
+ * Unlock the Web Speech engine on iOS Safari. Must be called synchronously
+ * inside a user gesture handler (e.g. the Start button click). Speaks a
+ * silent placeholder utterance — after this, subsequent speak() calls
+ * work even when fired from useEffect or async chains.
+ */
+export function primeSpeechEngine() {
+  if (typeof speechSynthesis === "undefined") return;
+  try {
+    const u = new SpeechSynthesisUtterance(" ");
+    u.volume = 0;
+    speechSynthesis.speak(u);
+  } catch (e) {
+    // best-effort
+  }
+}
+
+/**
  * Speak a line as Thoth.
  *
  * This is the function Mars wrote from scratch!

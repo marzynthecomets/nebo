@@ -14,8 +14,8 @@ import {
   INITIAL_STATE,
 } from "./neboEngine";
 import { STATE_NAMES, getStateCoordinates, DEFAULT_LOCATION } from "./usCities";
-import { speakAsThoth, cancelThothSpeech } from "./thothSpeech";
-import { playNeboChirps, cancelNeboChirps, startScanPings, stopScanPings, playScanPing } from "./neboChirps";
+import { speakAsThoth, cancelThothSpeech, primeSpeechEngine } from "./thothSpeech";
+import { playNeboChirps, cancelNeboChirps, startScanPings, stopScanPings, playScanPing, unlockAudio } from "./neboChirps";
 import "./App.css";
 
 /*
@@ -504,7 +504,17 @@ function App() {
             ))}
           </div>
           <img src={`${process.env.PUBLIC_URL}/assets/nebologo.png`} alt="Nebo!" className="title-logo" draggable={false} />
-          <button className="title-button" onClick={() => setPhase("idle")}>
+          <button
+            className="title-button"
+            onClick={() => {
+              // iOS Safari requires audio APIs to be unlocked synchronously
+              // inside a user gesture. Prime both before any state changes
+              // or async work — after this, audio works from anywhere.
+              unlockAudio();
+              primeSpeechEngine();
+              setPhase("idle");
+            }}
+          >
             Let's get <strong>star</strong>ted!
           </button>
         </div>
