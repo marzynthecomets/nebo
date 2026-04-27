@@ -156,6 +156,8 @@ function App() {
 
     if (result.showCityPicker) {
       setPhase("picking");
+    } else if (result.showPleaButtons) {
+      setPhase("pleading");
     } else if (result.showScanResult) {
       triggerScan(result.newState);
     } else if (result.newState.stage >= 1) {
@@ -376,6 +378,11 @@ function App() {
     const result = processSkip(gameState);
     applyResult(result);
     setSelectedState("");
+  }
+
+  function handlePlea(answer, label) {
+    const result = processMessage(answer, gameState);
+    applyResult(result, label);
   }
 
   function handleKeyDown(e) {
@@ -682,7 +689,18 @@ function App() {
               </div>
             )}
 
-            {phase !== "picking" && phase !== "hub" && (
+            {phase === "pleading" && (
+              <div className="picker-buttons">
+                <button className="picker-submit" onClick={() => handlePlea("yes", "Okay, fine")}>
+                  Okay, fine
+                </button>
+                <button className="picker-skip" onClick={() => handlePlea("no", "No, goodbye")}>
+                  No, goodbye
+                </button>
+              </div>
+            )}
+
+            {phase !== "picking" && phase !== "hub" && phase !== "pleading" && (
               <div className="input-area">
                 {gameState.stage === 90 || gameState.stage === 91 ? (
                   <button className="goodbye-button" onClick={handleGoodbye}>

@@ -14,7 +14,7 @@
  *   0 → Kid says hi (greeting) → "Oh, are you a human?"
  *   1 → "Are you a human?" (yes/no) → introduces Thoth + Nebo → "Can you help?"
  *   2 → "Can you help?" (yes/no)
- *       → no → "Can you tell us where we've landed?" (yes/no OR place name)
+ *       → no → "Nebo says please!" (yes/no, no data collected)
  *   3 → State picker (dropdown OR skip)
  *   4 → Scan result displayed
  *   5 → "Scan again?" / type star name
@@ -24,6 +24,8 @@
  *   91 → Conversation ended gracefully
  * ============================================================
  */
+
+import { STATE_NAMES } from "./usCities";
 
 // ============================================================
 // Nebo Translator — Bouba, not kiki
@@ -438,6 +440,15 @@ function detectIntent(input) {
   if (NO_WORDS.some((n) => lower === n || lower.startsWith(n + " ") || lower.startsWith(n + "!"))) {
     return "no";
   }
+
+  // Fuzzy fallback for typos — only on inputs ≥3 chars to avoid 1-letter false positives
+  const firstWord = lower.split(/[\s!.,?]+/)[0] || "";
+  if (firstWord.length >= 3) {
+    if (fuzzyMatch(firstWord, GREETING_WORDS)) return "greeting";
+    if (fuzzyMatch(firstWord, YES_WORDS)) return "yes";
+    if (fuzzyMatch(firstWord, NO_WORDS)) return "no";
+  }
+
   return "other";
 }
 
@@ -518,14 +529,20 @@ export function processMessage(input, state) {
     }
 
     return {
-      messages: [FALLBACK_RESPONSES[1]],
-      newState: state,
+      messages: [
+        {
+          nebo: translateLine("Earth language is strange!"),
+          thoth: "Earth language is so strange, but that's okay! I'm Thoth, the ship's computer. This is Nebo. We just crashed here on Earth. Can you help?",
+          emoticon: EMOTICONS.happy,
+        },
+      ],
+      newState: { ...state, stage: 2 },
       expectingInput: "yesno",
     };
   }
 
   // ---- Stage 2: "Can you help?" ----
-  if (stage === 2 && subStage !== "no_followup") {
+  if (stage === 2 && subStage !== "pleaded") {
     if (intent === "yes") {
       return {
         messages: [
@@ -545,13 +562,14 @@ export function processMessage(input, state) {
       return {
         messages: [
           {
-            nebo: "Nib otz~! Plaabpfaab~!",
-            thoth: "Oh no. Can you at least tell us where we've landed?",
+            nebo: translateLine("Please") + "~!",
+            thoth: "Nebo says please!",
             emoticon: EMOTICONS.sad,
           },
         ],
-        newState: { ...state, stage: 2, subStage: "no_followup" },
+        newState: { ...state, stage: 2, subStage: "pleaded" },
         expectingInput: "yesno",
+        showPleaButtons: true,
       };
     }
 
@@ -562,14 +580,14 @@ export function processMessage(input, state) {
     };
   }
 
-  // ---- Stage 2 (no followup): "Can you at least tell us where we've landed?" ----
-  if (stage === 2 && subStage === "no_followup") {
+  // ---- Stage 2 (pleaded): Nebo begged — last chance ----
+  if (stage === 2 && subStage === "pleaded") {
     if (intent === "yes") {
       return {
         messages: [
           {
-            nebo: "Noowoo!",
-            thoth: "Thank you! Where are we?",
+            nebo: "Pfa!",
+            thoth: "Oh thank you! We're trying to launch our star scanner. Do you know where we've landed?",
             emoticon: EMOTICONS.happy,
           },
         ],
@@ -594,17 +612,8 @@ export function processMessage(input, state) {
       };
     }
 
-    // Check if they typed a place name instead of yes/no
-    if (intent === "other") {
-      const cleaned = input.replace(/[^a-zA-Z\s'-]/g, "").trim();
-      if (cleaned.length >= 2 && !isBad(cleaned)) {
-        const capitalized = capitalizeWords(cleaned);
-        return processStateSelection(capitalized, { ...state, subStage: null });
-      }
-    }
-
     return {
-      messages: [FALLBACK_RESPONSES["2no"]],
+      messages: [FALLBACK_RESPONSES[2]],
       newState: state,
       expectingInput: "yesno",
     };
@@ -637,8 +646,9 @@ export function processMessage(input, state) {
       };
     }
 
-    const capitalized = capitalizeWords(locationName);
-    return processStateSelection(capitalized, state);
+    const matchedState = fuzzyMatch(locationName, STATE_NAMES);
+    const stateName = matchedState || capitalizeWords(locationName);
+    return processStateSelection(stateName, state);
   }
 
   // ---- Stage 5: scan results — type star name or yes/no ----
