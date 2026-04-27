@@ -127,8 +127,14 @@ export function speakAsThoth(text, { applyPronunciations = true } = {}) {
   // Don't try to speak empty text
   if (!text || !text.trim()) return;
 
-  // Cancel anything currently being spoken
-  cancelThothSpeech();
+  // iOS Safari quirk: speechSynthesis.cancel() followed by immediate speak()
+  // eats the first ~250ms of the new utterance — the kid hears the line
+  // mid-word. Only cancel if actually mid-speech, and defer speak slightly
+  // so the engine can settle.
+  const wasBusy = window.speechSynthesis.speaking || window.speechSynthesis.pending;
+  if (wasBusy) {
+    cancelThothSpeech();
+  }
 
   // Get all available voices from the browser — prefer cached voices since
   // getVoices() returns [] on first call in Chrome/Safari before the
@@ -159,6 +165,12 @@ export function speakAsThoth(text, { applyPronunciations = true } = {}) {
     // If neither found, browser uses its default voice — that's fine
   }
 
-  // Speak!
-  speechSynthesis.speak(u);
+  // Speak! If we cancelled an in-progress utterance, give iOS Safari a
+  // tick to clear its queue before starting the new one — otherwise the
+  // start of the line gets eaten.
+  if (wasBusy) {
+    setTimeout(() => speechSynthesis.speak(u), 100);
+  } else {
+    speechSynthesis.speak(u);
+  }
 }
