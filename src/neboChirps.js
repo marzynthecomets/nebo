@@ -56,21 +56,47 @@ function getAudioContext() {
 }
 
 /**
+ * Wait for the AudioContext to actually be in the "running" state.
+ * iOS auto-suspends contexts after ~30s of inactivity; resume() returns
+ * a Promise that only resolves once the transition completes. Scheduling
+ * audio events while still suspended can silently drop them, so we await
+ * here before any playback path.
+ */
+async function ensureRunning(ctx) {
+  if (ctx.state === "suspended") {
+    try {
+      await ctx.resume();
+    } catch (e) {
+      // best-effort
+    }
+  }
+}
+
+/**
  * Unlock audio playback on iOS Safari. Must be called synchronously
  * inside a user gesture handler (e.g. the Start button click) — after
  * that, audio works from anywhere including useEffect and async chains.
  *
- * Creates the AudioContext and plays a 1-sample silent buffer to satisfy
- * iOS's "must play audio inside a gesture" rule.
+ * Plays a brief silent oscillator (non-zero duration) which iOS Safari
+ * recognizes as real audio playback, satisfying the gesture-required rule.
  */
 export function unlockAudio() {
   try {
     const ctx = getAudioContext();
-    const buffer = ctx.createBuffer(1, 1, 22050);
-    const source = ctx.createBufferSource();
-    source.buffer = buffer;
-    source.connect(ctx.destination);
-    source.start(0);
+
+    // Brief silent oscillator — more reliable than a 1-sample buffer.
+    // iOS Safari needs the audio source to have non-trivial duration.
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    gain.gain.value = 0;
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(0);
+    osc.stop(ctx.currentTime + 0.05);
+
+    if (ctx.state === "suspended") {
+      ctx.resume();
+    }
   } catch (e) {
     // best-effort — failure here doesn't block app
   }
@@ -233,12 +259,16 @@ function randFreq(low, high) {
  * @returns {Promise} - Resolves when chirps finish
  */
 export function playNeboChirps(neboText, emoticon) {
-  return new Promise((resolve) => {
+  return new Promise(async (resolve) => {
     // Cancel any chirps already playing
     cancelNeboChirps();
     isChirping = true;
 
     const ctx = getAudioContext();
+    // iOS may have auto-suspended the context — wait for it to actually
+    // be running before scheduling chirps, otherwise events get dropped.
+    await ensureRunning(ctx);
+
     const mood = emotionToMood(emoticon);
     const profile = MOOD_PROFILES[mood];
     const chirpCount = getChirpCount(neboText);
@@ -320,8 +350,11 @@ let scanPingCount = 0;
  * Play a single scanner ping. Driven by the beam's CSS animation
  * events in App.js so the sound is always in sync with the visual.
  */
-export function playScanPing() {
+export async function playScanPing() {
   const ctx = getAudioContext();
+  // Same iOS auto-suspend defense as the chirps — without this, the first
+  // ping after a long pause on the loading screen gets silently dropped.
+  await ensureRunning(ctx);
   const now = ctx.currentTime;
   const osc = ctx.createOscillator();
   osc.type = "triangle";
