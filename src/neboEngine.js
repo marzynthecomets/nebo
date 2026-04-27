@@ -16,6 +16,9 @@
  *   2 → "Can you help?" (yes/no)
  *       → no → "Nebo says please!" (yes/no, no data collected)
  *   3 → State picker (dropdown OR skip)
+ *       sub "bortle"  → Bortle Scale fact + "Did you know that?" (yes/no buttons)
+ *       sub "ready"   → "Ready to launch?" (Launch Scanner / Not yet)
+ *       sub "waiting" → "Whenever you're ready" (Launch Scanner / Exit)
  *   4 → Scan result displayed
  *   5 → "Scan again?" / type star name
  *
@@ -25,7 +28,7 @@
  * ============================================================
  */
 
-import { STATE_NAMES } from "./usCities";
+import STATE_CAPITALS, { STATE_NAMES } from "./usCities";
 
 // ============================================================
 // Nebo Translator — Bouba, not kiki
@@ -411,21 +414,194 @@ export const EMOTICONS = {
 // ============================================================
 
 const YES_WORDS = [
-  "yes", "yeah", "yep", "yup", "ya", "ye", "yea", "sure",
-  "ok", "okay", "yah", "yas", "yess", "yesss", "totally",
-  "absolutely", "definitely", "of course", "duh", "mhm",
-  "uh huh", "si", "oui", "y"
+  // --- Classic yes ---
+  "yes", "yeah", "yep", "yup", "ya", "ye", "yea", "yah", "yeh",
+  "yas", "yass", "yasss", "yusss", "yass queen",
+  "yess", "yesss", "yessss", "yesssss", "yessssss",
+  "yeaah", "yeahh", "yeahhh", "yeahhhh",
+  "yepp", "yuppp", "yuppers", "yepperoni", "yuparoo",
+  "yepperdoodle", "yepski", "yepsicle",
+  "y",
+
+  // --- Casual agreement ---
+  "sure", "sure thing", "shore", "shore thing", "fer sure",
+  "ok", "okay", "okk", "okkk", "okie", "okey", "okeh", "okai",
+  "k", "kk", "kkk sure", "kk sure", "alright", "aiight", "aight", "ight",
+  "bet", "betbet", "fact", "facts", "true", "truth", "real talk",
+  "cool", "coolio", "cool cool", "cool beans", "fine", "fine fine",
+  "sounds good", "sounds great", "sounds fun", "sounds cool",
+  "sounds awesome", "sounds like a plan", "good idea", "great idea",
+  "for sure", "fo sho", "fosho", "fer sho",
+  "deal", "it's a deal", "its a deal", "you got a deal",
+
+  // --- Okie-dokie family ---
+  "okie doke", "okiedoke", "okie dokes", "okiedokes",
+  "okie dokie", "okiedokie", "okie dokey", "okiedokey",
+  "okey doke", "okeydoke", "okey dokey", "okeydokey",
+  "okie dokie artichokie", "okie dokie smokie",
+  "okie dokie pokie", "okie dokie loki",
+
+  // --- Emphatic yes ---
+  "totally", "totes", "totes magotes", "absolutely", "absolutley",
+  "definitely", "definately", "of course", "ofc", "course",
+  "duh", "well duh", "obviously", "obvi", "obvs",
+  "heck yes", "heck yeah", "heckyes", "heckyeah",
+  "oh yeah", "oh yes", "oh ya", "ohyeah",
+  "yes please", "yes pls", "yeah sure", "yea sure", "yeah okay",
+  "100", "100%", "1000%", "10000%",
+  "indeed", "indubitably", "certainly", "naturally",
+  "you bet", "you betcha", "betcha", "darn right", "dang right",
+  "darn tootin", "darn tootin'",
+
+  // --- Affirmative action phrases ---
+  "i can", "i will", "i'll help", "ill help",
+  "i can help", "i will help", "i wanna help",
+  "i want to help", "i'd love to", "id love to", "i would love to",
+  "i want to", "i wanna", "wanna",
+  "i'll try", "ill try", "i can try", "i'll see what i can do",
+  "let's go", "lets go", "let's gooo", "lets gooo",
+  "let's do it", "lets do it", "let's do this", "lets do this",
+  "let's roll", "lets roll", "lets ride",
+  "let me help", "lemme help", "lemme at em", "lemme at them",
+  "count me in", "i'm in", "im in", "i'm down", "im down",
+  "i'm game", "im game", "down for it", "down to", "down to help",
+
+  // --- Hype / cheers ---
+  "woohoo", "woo hoo", "woohooo", "woop", "woot", "woot woot",
+  "yay", "yayy", "yayyy", "yayyyy", "yaya",
+  "wahoo", "whoo", "whoop", "whoopee",
+  "hooray", "hurray", "hurrah", "huzzah",
+  "epic", "amazing", "awesome", "wonderful", "fantastic",
+
+  // --- Got-it / roger ---
+  "got it", "gotcha", "got ya", "u got it", "you got it",
+  "roger", "roger that", "10-4", "10 4", "ten four",
+  "copy", "copy that", "affirmative",
+  "no problem", "np", "no prob",
+
+  // --- Southern / regional ---
+  "yes sir", "yessir", "yes ma'am", "yes maam", "yes mam",
+  "no problemo", "no problem-o", "no probs",
+  "you betcha", "betcha bottom dollar",
+  "fer sure", "fer sho",
+
+  // --- Vibe-based yes ---
+  "why not", "say less", "less go", "leggo", "lesgo",
+  "lfg", "yolo", "send it", "we ridin", "we eatin",
+  "fr", "fr fr", "frfr", "for real", "for realz",
+  "no cap", "nocap", "on god", "ong",
+
+  // --- Hesitant yes (still yes) ---
+  "i guess", "i guess so", "guess so", "i guess yeah",
+  "uh yes", "uh yeah", "umm yes", "umm yeah",
+  "fine then", "ok then", "ok fine", "okay fine",
+  "alright then", "alright fine",
+
+  // --- Filler-style yes ---
+  "mhm", "mmhm", "mhmm", "mm hmm", "mmm hmm",
+  "uh huh", "uh-huh", "uhuh", "uhhuh",
+  "yee", "yeet", "yee haw", "yeehaw", "yippee", "yippie",
+
+  // --- Multilingual ---
+  "si", "sí", "oui", "ja", "jah", "da", "hai", "ya ya",
+  "claro", "cierto", "vale", "okido",
 ];
 
 const NO_WORDS = [
-  "no", "nah", "nope", "nay", "never", "not really", "no way",
-  "noo", "nooo", "noooo", "nahh", "nuh uh", "n"
+  // --- Classic no ---
+  "no", "nah", "nope", "nay", "never", "noooope", "nopers",
+  "noo", "nooo", "noooo", "nooooo", "noooooo", "nooooooo",
+  "nahh", "nahhh", "nahhhh",
+  "nopee", "nopeee", "nopes",
+  "n",
+
+  // --- Soft no ---
+  "not really", "not so much", "not particularly",
+  "no thanks", "no thank you", "no thx", "no ty",
+  "nah thanks", "nah i'm good", "nah im good",
+  "i'm good", "im good", "i'm okay", "im okay",
+  "all good", "im fine", "i'm fine",
+  "no way", "no way jose", "no way josé",
+  "pass", "i pass", "i'll pass", "ill pass",
+  "hard pass", "soft pass",
+
+  // --- Refusal / no chance ---
+  "no can do", "nocando", "no chance", "fat chance",
+  "not a chance", "not happening", "ain't happening",
+  "not gonna happen", "not gonna", "not going to",
+  "i refuse", "i decline", "decline",
+  "rather not", "i'd rather not", "id rather not",
+
+  // --- Maybe later (treat as no for this experience) ---
+  "later", "maybe later", "not now", "another time",
+  "next time", "some other time",
+
+  // --- Dismissive no ---
+  "nuh uh", "nuh-uh", "nuhuh", "nuh", "uh uh", "uh-uh",
+  "negative", "negatory", "negat",
+  "nada", "nein", "non", "nyet", "iie",
+  "as if", "lol no", "lmao no",
+
+  // --- Kid-style no / yuck ---
+  "eww", "ew", "ewww", "ewwww",
+  "yuck", "yucky", "ick", "icky", "blech", "bleh",
+  "gross", "grody", "nasty",
+  "boo", "booo", "boooo",
+  "i don't want to", "i dont want to",
+  "i don't wanna", "i dont wanna", "dont wanna", "don't wanna",
+  "leave me alone", "go away", "shoo", "scram",
+  "stop", "stop it", "no stop",
+  "bye", "goodbye", "bye bye", "byebye", "no bye",
+  "can't", "cant", "i can't", "i cant", "i cannot",
+
+  // --- Southern / regional no ---
+  "no sir", "nossir", "no ma'am", "no maam", "no mam",
+
+  // --- Skip-style no ---
+  "skip", "skip it", "i'll skip", "ill skip",
 ];
 
 const GREETING_WORDS = [
+  // --- Classic greetings ---
   "hi", "hello", "hey", "heya", "hiya", "yo", "sup", "howdy",
-  "hiii", "hiiii", "hellooo", "heyyy", "heyy",
-  "greetings", "whats up", "what's up",
+  "hii", "hiii", "hiiii", "hiiiii",
+  "helo", "hellooo", "helloo", "hellooooo",
+  "heyy", "heyyy", "heyyyy", "heyyyyy",
+  "howdy doody", "howdy do", "howdy partner",
+
+  // --- Casual greetings ---
+  "whats up", "what's up", "wassup", "wussup", "wazzup",
+  "what up", "whatup", "wuzzup", "watup",
+  "supp", "suppp", "supppp",
+  "what's good", "whats good", "what good",
+  "how's it", "hows it", "how's it going", "hows it going",
+  "how's it goin", "hows it goin",
+  "how are ya", "how ya doin", "how you doin",
+  "hey there", "hi there", "hello there",
+
+  // --- Enthusiastic greetings ---
+  "greetings", "salutations", "well hello",
+  "ayo", "ayoo", "ayooo", "ayyy", "ayyyy",
+  "yooo", "yoooo", "yooooo", "yo yo", "yoyo", "yo yo yo",
+  "heyooo", "heyyooo",
+
+  // --- Conversational openers ---
+  "good morning", "good afternoon", "good evening",
+  "morning", "mornin", "afternoon", "evening", "evenin",
+  "gm", "gn",
+  "knock knock",
+
+  // --- Multilingual greetings ---
+  "hola", "holla", "hallo", "bonjour", "ciao", "chao",
+  "aloha", "konnichiwa", "konichiwa",
+  "namaste", "shalom", "ahoy", "ahoy there", "ahoy matey",
+  "guten tag", "salaam", "salam", "kia ora", "g'day",
+  "gday", "gday mate",
+
+  // --- Kid-style greetings ---
+  "hai", "hai hai", "hewwo", "hewoo", "henlo", "henlo there",
+  "ello", "ello ello", "oi", "oioi", "oi oi",
+  "hewwo there", "hewo",
 ];
 
 function detectIntent(input) {
@@ -441,12 +617,17 @@ function detectIntent(input) {
     return "no";
   }
 
-  // Fuzzy fallback for typos — only on inputs ≥3 chars to avoid 1-letter false positives
+  // Fuzzy fallback for typos — only on inputs ≥3 chars, and only against
+  // candidates ≥3 chars (otherwise short entries like "oi"/"ya" hijack
+  // longer typos: "oki" is 1 edit from "oi" but should match "okie" → yes)
   const firstWord = lower.split(/[\s!.,?]+/)[0] || "";
   if (firstWord.length >= 3) {
-    if (fuzzyMatch(firstWord, GREETING_WORDS)) return "greeting";
-    if (fuzzyMatch(firstWord, YES_WORDS)) return "yes";
-    if (fuzzyMatch(firstWord, NO_WORDS)) return "no";
+    const longGreetings = GREETING_WORDS.filter((w) => w.length >= 3);
+    const longYes = YES_WORDS.filter((w) => w.length >= 3);
+    const longNo = NO_WORDS.filter((w) => w.length >= 3);
+    if (fuzzyMatch(firstWord, longGreetings)) return "greeting";
+    if (fuzzyMatch(firstWord, longYes)) return "yes";
+    if (fuzzyMatch(firstWord, longNo)) return "no";
   }
 
   return "other";
@@ -619,8 +800,122 @@ export function processMessage(input, state) {
     };
   }
 
+  // ---- Stage 3 (bortle): "Did you know that?" ----
+  if (stage === 3 && subStage === "bortle") {
+    if (intent === "yes") {
+      return {
+        messages: [
+          {
+            nebo: translateLine("Clever!"),
+            thoth: "Clever human. Ready to launch?",
+            emoticon: EMOTICONS.happy,
+          },
+        ],
+        newState: { ...state, subStage: "ready" },
+        expectingInput: "yesno",
+        showReadyButtons: true,
+      };
+    }
+
+    if (intent === "no") {
+      return {
+        messages: [
+          {
+            nebo: translateLine("That's okay!"),
+            thoth: "Nebo and I are always learning too! Ready to launch?",
+            emoticon: EMOTICONS.happy,
+          },
+        ],
+        newState: { ...state, subStage: "ready" },
+        expectingInput: "yesno",
+        showReadyButtons: true,
+      };
+    }
+
+    return {
+      messages: [{ nebo: "…?", thoth: "Did you know that? You can say yes or no!", emoticon: EMOTICONS.neutral }],
+      newState: state,
+      expectingInput: "yesno",
+      showBortleButtons: true,
+    };
+  }
+
+  // ---- Stage 3 (ready): "Ready to launch?" ----
+  if (stage === 3 && subStage === "ready") {
+    if (intent === "yes") {
+      return {
+        messages: [
+          {
+            nebo: "Miinii~!",
+            thoth: `Scanning the skies above ${location || "us"}!`,
+            emoticon: EMOTICONS.scanning,
+          },
+        ],
+        newState: { ...state, stage: 4, subStage: null },
+        expectingInput: null,
+        showScanResult: true,
+      };
+    }
+
+    if (intent === "no") {
+      return {
+        messages: [
+          {
+            nebo: translateLine("We can wait!"),
+            thoth: "Whenever you're ready.",
+            emoticon: EMOTICONS.chill,
+          },
+        ],
+        newState: { ...state, subStage: "waiting" },
+        expectingInput: "yesno",
+        showWaitingButtons: true,
+      };
+    }
+
+    return {
+      messages: [{ nebo: "…?", thoth: "Ready to launch the scanner?", emoticon: EMOTICONS.neutral }],
+      newState: state,
+      expectingInput: "yesno",
+      showReadyButtons: true,
+    };
+  }
+
+  // ---- Stage 3 (waiting): "Whenever you're ready" ----
+  if (stage === 3 && subStage === "waiting") {
+    if (intent === "yes") {
+      return {
+        messages: [
+          {
+            nebo: "Miinii~!",
+            thoth: `Scanning the skies above ${location || "us"}!`,
+            emoticon: EMOTICONS.scanning,
+          },
+        ],
+        newState: { ...state, stage: 4, subStage: null },
+        expectingInput: null,
+        showScanResult: true,
+      };
+    }
+
+    if (intent === "no") {
+      return {
+        messages: [],
+        newState: { ...state, stage: 91, subStage: null },
+        expectingInput: null,
+        triggerGoodbye: true,
+      };
+    }
+
+    return {
+      messages: [{ nebo: "…?", thoth: "Want to launch the scanner, or say goodbye?", emoticon: EMOTICONS.neutral }],
+      newState: state,
+      expectingInput: "yesno",
+      showWaitingButtons: true,
+    };
+  }
+
   // ---- Stage 3: state picker ----
-  if (stage === 3) {
+  if (stage === 3 && !subStage) {
     const locationName = input.replace(/[^a-zA-Z\s'-]/g, "").trim();
     if (!locationName) {
       return {
@@ -770,18 +1065,43 @@ export function processMessage(input, state) {
 // State selection handler (was processCitySelection)
 // ============================================================
 
+// "an 8.5" but "a 9" / "a 6.2" — based on the leading digit's spoken sound
+function bortleArticle(n) {
+  return Math.floor(n) === 8 ? "an" : "a";
+}
+
 export function processStateSelection(stateName, state) {
+  const info = STATE_CAPITALS[stateName];
+
+  // Unknown state name (typed something we couldn't fuzzy-match) — skip Bortle, scan directly
+  if (!info) {
+    return {
+      messages: [
+        {
+          nebo: "Miinii~!",
+          thoth: `Scanning the skies above ${stateName}!`,
+          emoticon: EMOTICONS.scanning,
+        },
+      ],
+      newState: { ...state, stage: 4, location: stateName, subStage: null },
+      expectingInput: null,
+      showScanResult: true,
+    };
+  }
+
+  const article = bortleArticle(info.bortle);
+
   return {
     messages: [
       {
-        nebo: "Miinii~!",
-        thoth: `Scanning the skies above ${stateName}!`,
-        emoticon: EMOTICONS.scanning,
+        nebo: translateLine(stateName) + "!",
+        thoth: `Oh, the capital of ${stateName}, ${info.capital}, is ${article} ${info.bortle} on the Bortle Scale (1-9)! The scale tells us how much human-made light blocks the stars at night! Did you know that?`,
+        emoticon: EMOTICONS.neutral,
       },
     ],
-    newState: { ...state, stage: 4, location: stateName, subStage: null },
-    expectingInput: null,
-    showScanResult: true,
+    newState: { ...state, stage: 3, location: stateName, subStage: "bortle" },
+    expectingInput: "yesno",
+    showBortleButtons: true,
   };
 }
 

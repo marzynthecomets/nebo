@@ -154,10 +154,21 @@ function App() {
 
     setGameState(result.newState);
 
+    if (result.triggerGoodbye) {
+      handleGoodbye();
+      return;
+    }
+
     if (result.showCityPicker) {
       setPhase("picking");
     } else if (result.showPleaButtons) {
       setPhase("pleading");
+    } else if (result.showBortleButtons) {
+      setPhase("bortle");
+    } else if (result.showReadyButtons) {
+      setPhase("ready");
+    } else if (result.showWaitingButtons) {
+      setPhase("waiting");
     } else if (result.showScanResult) {
       triggerScan(result.newState);
     } else if (result.newState.stage >= 1) {
@@ -666,7 +677,7 @@ function App() {
                     onClick={handleStateSubmit}
                     disabled={!selectedState}
                   >
-                    Launch Scanner
+                    Enter
                   </button>
                   <button className="picker-skip" onClick={handleSkip}>
                     Skip
@@ -690,7 +701,7 @@ function App() {
             )}
 
             {phase === "pleading" && (
-              <div className="picker-buttons">
+              <div className="picker-buttons picker-buttons-equal">
                 <button className="picker-submit" onClick={() => handlePlea("yes", "Okay, fine")}>
                   Okay, fine
                 </button>
@@ -700,7 +711,40 @@ function App() {
               </div>
             )}
 
-            {phase !== "picking" && phase !== "hub" && phase !== "pleading" && (
+            {phase === "bortle" && (
+              <div className="picker-buttons picker-buttons-equal">
+                <button className="picker-submit" onClick={() => handlePlea("yes", "Yes!")}>
+                  Yes!
+                </button>
+                <button className="picker-skip" onClick={() => handlePlea("no", "No!")}>
+                  No!
+                </button>
+              </div>
+            )}
+
+            {phase === "ready" && (
+              <div className="picker-buttons">
+                <button className="picker-submit" onClick={() => handlePlea("yes", "Launch Scanner")}>
+                  Launch Scanner
+                </button>
+                <button className="picker-skip" onClick={() => handlePlea("no", "Not yet")}>
+                  Not yet
+                </button>
+              </div>
+            )}
+
+            {phase === "waiting" && (
+              <div className="picker-buttons">
+                <button className="picker-submit" onClick={() => handlePlea("yes", "Launch Scanner")}>
+                  Launch Scanner
+                </button>
+                <button className="picker-skip" onClick={() => handlePlea("no", "Exit")}>
+                  Exit
+                </button>
+              </div>
+            )}
+
+            {phase !== "picking" && phase !== "hub" && phase !== "pleading" && phase !== "bortle" && phase !== "ready" && phase !== "waiting" && (
               <div className="input-area">
                 {gameState.stage === 90 || gameState.stage === 91 ? (
                   <button className="goodbye-button" onClick={handleGoodbye}>

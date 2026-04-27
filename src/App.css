@@ -185,7 +185,7 @@ body {
 .nebo-scanning {
   top: 2%;
   left: auto;
-  right: -2%;
+  right: 2%;
   width: 30%;
   transform: none;
   z-index: 16;
@@ -619,6 +619,11 @@ body {
 .picker-buttons {
   display: flex;
   gap: 8px;
+}
+
+/* Equal-width variant for peer-choice button pairs (plea, bortle, ready, waiting) */
+.picker-buttons-equal > button {
+  flex: 1;
 }
 
 /* Launch Scanner button */

@@ -83,6 +83,11 @@ function applyStarPronunciations(text) {
   return out;
 }
 
+// Visual "(1-9)" should voice as "1 through 9", not "1 9" / "1 minus 9"
+function applySpeechReplacements(text) {
+  return text.replace(/\((\d+)\s*-\s*(\d+)\)/g, "$1 through $2");
+}
+
 /**
  * Cancel any currently-speaking Thoth dialogue.
  * Called before each new speak() so lines don't pile up.
@@ -110,7 +115,8 @@ export function speakAsThoth(text, { applyPronunciations = true } = {}) {
   const voices = speechSynthesis.getVoices();
 
   // Create the utterance — the "package" of text to be spoken
-  const spoken = applyPronunciations ? applyStarPronunciations(text) : text;
+  const withPronunciations = applyPronunciations ? applyStarPronunciations(text) : text;
+  const spoken = applySpeechReplacements(withPronunciations);
   const u = new SpeechSynthesisUtterance(spoken);
 
   // Try to find Superstar (Mars's primary pick for Thoth)
