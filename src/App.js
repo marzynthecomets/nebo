@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import {
   processMessage,
-  processCitySelection,
+  processStateSelection,
   processSkip,
   processScanComplete,
   pickConstellation,
@@ -13,46 +13,30 @@ import {
   EMOTICONS,
   INITIAL_STATE,
 } from "./neboEngine";
-import { STATE_NAMES, getCitiesForState, getCoordinates, DEFAULT_LOCATION } from "./usCities";
+import { STATE_NAMES, getStateCoordinates, DEFAULT_LOCATION } from "./usCities";
 import { speakAsThoth, cancelThothSpeech } from "./thothSpeech";
-import { playNeboChirps, cancelNeboChirps, startScanPings, stopScanPings, playScanPing } from "./neboChirps";  // ← NEW: Nebo's voice!
+import { playNeboChirps, cancelNeboChirps, startScanPings, stopScanPings, playScanPing } from "./neboChirps";
 import "./App.css";
 
 /*
  * ============================================================
- * NEBO — App v4 (Audio Integration)
+ * NEBO — App v5 (COPPA Compliance)
  * ============================================================
  *
- * Changes from v3:
- * - ★ Thoth speech (Web Speech API / Polly-ready)
- * - ★ Nebo chirps (Web Audio API synthesizer)
- * - ★ Sequential audio: Nebo chirps first → Thoth speaks after
- * - Dialogue tweaks (scanner launch, back-to-constellation)
+ * Changes from v4:
+ * - ★ Removed name entry phase (COPPA)
+ * - ★ State-only picker (no city — COPPA)
+ * - ★ Removed city shorthands, selectedCity state
+ * - ★ Uses state capital coordinates for API
+ * - ★ Updated dialogue and placeholder text
  * ============================================================
  */
 
-// Fallback star chart URL — cached Orion chart in case API is slow/down
+// Fallback star chart URL
 const FALLBACK_CHART_URL = "/assets/fallback-starchart.png";
 
 // API timeout in milliseconds
 const API_TIMEOUT = 20000;
-
-// Common city abbreviations/shorthands
-const CITY_SHORTHANDS = {
-  "la": "Los Angeles", "nyc": "New York City", "sf": "San Francisco",
-  "atl": "Atlanta", "chi": "Chicago", "phx": "Phoenix", "philly": "Philadelphia",
-  "dc": "Washington", "nola": "New Orleans", "lv": "Las Vegas", "kc": "Kansas City",
-  "stl": "St. Louis", "slc": "Salt Lake City", "det": "Detroit", "bos": "Boston",
-  "pdx": "Portland", "sea": "Seattle", "den": "Denver", "hou": "Houston",
-  "dal": "Dallas", "sa": "San Antonio", "sd": "San Diego", "tb": "Tampa",
-  "jax": "Jacksonville", "mem": "Memphis", "nash": "Nashville", "cle": "Cleveland",
-  "pgh": "Pittsburgh", "mke": "Milwaukee", "mpls": "Minneapolis", "indy": "Indianapolis",
-};
-
-function expandCityShorthand(input) {
-  const lower = input.toLowerCase().trim();
-  return CITY_SHORTHANDS[lower] || null;
-}
 
 function App() {
   const [phase, setPhase] = useState("title");
@@ -62,9 +46,8 @@ function App() {
   const [latestNebo, setLatestNebo] = useState("");
   const [emoticon, setEmoticon] = useState("");
 
-  // City picker state
+  // State picker (was state + city)
   const [selectedState, setSelectedState] = useState("");
-  const [selectedCity, setSelectedCity] = useState("");
 
   // Star chart state
   const [starChartUrl, setStarChartUrl] = useState("");
@@ -93,14 +76,7 @@ function App() {
     }
   }, [chatLog]);
 
-  // ============================================================
   // ★ THOTH SPEECH — Chat log
-  // ============================================================
-  // Watches chatLog. When a new Thoth message appears, speaks it.
-  // NOTE: Thoth's text only gets added to chatLog AFTER Nebo's
-  // chirps finish (see applyResult), so the timing is:
-  // Nebo chirps → Thoth text appears → Thoth speaks
-  // ============================================================
   useEffect(() => {
     const last = chatLog[chatLog.length - 1];
     if (last && last.type === "bot") {
@@ -108,18 +84,14 @@ function App() {
     }
   }, [chatLog]);
 
-  // ============================================================
   // ★ THOTH SPEECH — Scanner dialogue
-  // ============================================================
   useEffect(() => {
     if (scannerSpeech) {
       speakAsThoth(scannerSpeech);
     }
   }, [scannerSpeech]);
 
-  // ============================================================
-  // ★ CLEANUP — Stop all audio when leaving the page
-  // ============================================================
+  // ★ CLEANUP
   useEffect(() => {
     return () => {
       cancelThothSpeech();
@@ -128,7 +100,7 @@ function App() {
     };
   }, []);
 
-  // ---- Start loading facts rotation ----
+  // ---- Loading facts rotation ----
   const startLoadingFacts = useCallback(() => {
     const facts = getShuffledFacts();
     loadingFactsRef.current = facts;
@@ -158,29 +130,12 @@ function App() {
     return () => stopLoadingFacts();
   }, [stopLoadingFacts]);
 
-  // ============================================================
-  // ★ SEQUENTIAL AUDIO — The heart of the Nebo/Thoth performance
-  // ============================================================
-  //
-  // This is the key change. Instead of dumping everything at once:
-  //
-  // 1. Add user's message to chat (if any)
-  // 2. Update Nebo's bubble + emoticon
-  // 3. Play Nebo's chirps (mapped to mood + text length)
-  // 4. Wait for chirps to finish
-  // 5. THEN add Thoth's text to chatLog (which triggers speech)
-  // 6. Update game state and phase
-  //
-  // Mars — this uses async/await. "await" just means "pause here
-  // until this thing finishes." Summer topic!
-  // ============================================================
+  // ★ SEQUENTIAL AUDIO
   async function applyResult(result, userText = null) {
-    // Step 1: Add user's message to chat immediately (if they typed something)
     if (userText) {
       setChatLog((prev) => [...prev, { type: "user", text: userText }]);
     }
 
-    // Step 2: Update Nebo's bubble and emoticon right away
     const lastNebo = [...result.messages].reverse().find((m) => m.nebo);
     if (lastNebo) setLatestNebo(lastNebo.nebo);
 
@@ -188,28 +143,22 @@ function App() {
     const currentEmoticon = lastEmoticon ? lastEmoticon.emoticon : emoticon;
     if (lastEmoticon) setEmoticon(lastEmoticon.emoticon);
 
-    // Step 3: Play Nebo's chirps and wait for them to finish
     if (lastNebo && lastNebo.nebo) {
       await playNeboChirps(lastNebo.nebo, currentEmoticon);
     }
 
-    // Step 4: NOW add Thoth's text to chatLog (triggers speech via useEffect)
     setChatLog((prev) => [
       ...prev,
       ...result.messages.map((m) => ({ type: "bot", thoth: m.thoth })),
     ]);
 
-    // Step 5: Update game state
     setGameState(result.newState);
 
-    // Step 6: Phase transitions
     if (result.showCityPicker) {
       setPhase("picking");
     } else if (result.showScanResult) {
       triggerScan(result.newState);
-    } else if (result.newState.stage === 1) {
-      setPhase("naming");
-    } else if (result.newState.stage >= 2) {
+    } else if (result.newState.stage >= 1) {
       setPhase("chatting");
     }
   }
@@ -223,29 +172,26 @@ function App() {
     setStarChartUrl("");
     setShowingFact(false);
 
-    // Cancel any ongoing audio
     cancelThothSpeech();
     cancelNeboChirps();
 
     startLoadingFacts();
-    startScanPings();  // ★ Sonar pings while scanning
+    startScanPings();
 
+    // Use state capital coordinates, or default
     let lat = DEFAULT_LOCATION.lat;
     let lon = DEFAULT_LOCATION.lon;
 
-    if (state.city && state.city !== "New York City") {
-      for (const stateName of STATE_NAMES) {
-        const coords = getCoordinates(stateName, state.city);
-        if (coords) {
-          lat = coords.lat;
-          lon = coords.lon;
-          break;
-        }
+    if (state.location) {
+      const coords = getStateCoordinates(state.location);
+      if (coords) {
+        lat = coords.lat;
+        lon = coords.lon;
       }
     }
 
     const constellationId = pickConstellation(
-      state.city || "New York City",
+      state.location || "New York",
       state.scanCount,
       state.seenConstellations || []
     );
@@ -255,8 +201,6 @@ function App() {
     setScannerStars(stars);
     setScannerConstellationName(getConstellationName(chartConstellation));
 
-    // ★ Minimum loading time so kids see a few space facts
-    // The API fetch and the timer run in parallel — we wait for BOTH
     const minLoadingTime = new Promise((resolve) => setTimeout(resolve, 8000));
 
     try {
@@ -286,11 +230,10 @@ function App() {
       setStarChartUrl(FALLBACK_CHART_URL);
     }
 
-    // Wait for minimum loading time even if API was fast
     await minLoadingTime;
 
     stopLoadingFacts();
-    stopScanPings();  // ★ Stop sonar pings
+    stopScanPings();
     setStarChartLoading(false);
 
     const scanDone = processScanComplete(state, stars, chartConstellation);
@@ -299,7 +242,6 @@ function App() {
     const lastEmoticon = [...scanDone.messages].reverse().find((m) => m.emoticon);
     if (lastEmoticon) setEmoticon(lastEmoticon.emoticon);
 
-    // ★ Play Nebo's chirps before showing scanner dialogue
     if (lastNebo && lastNebo.nebo) {
       const currentEmoticon = lastEmoticon ? lastEmoticon.emoticon : EMOTICONS.excited;
       await playNeboChirps(lastNebo.nebo, currentEmoticon);
@@ -319,32 +261,20 @@ function App() {
     if (!trimmed) return;
     setInputValue("");
 
-    const expanded = expandCityShorthand(trimmed);
-    if (expanded && (gameState.stage === 2 || gameState.stage === 3)) {
-      trimmed = expanded;
-    }
-
     if (phase === "idle") {
-      // ★ First message — play chirps then show Thoth's greeting
+      // ★ First message — greeting, no name step
       const result = processMessage("hello", INITIAL_STATE);
       const neboText = result.messages[0]?.nebo || "";
       const emoText = result.messages[0]?.emoticon || EMOTICONS.neutral;
 
       setLatestNebo(neboText);
       setEmoticon(emoText);
-      setPhase("naming");
+      setPhase("chatting");
 
-      // Play chirps, then add Thoth's text
       playNeboChirps(neboText, emoText).then(() => {
         setChatLog(result.messages.map((m) => ({ type: "bot", thoth: m.thoth })));
         setGameState(result.newState);
       });
-      return;
-    }
-
-    if (phase === "naming") {
-      const result = processMessage(trimmed, gameState);
-      applyResult(result, trimmed);
       return;
     }
 
@@ -377,7 +307,6 @@ function App() {
         const lastEmoticon = [...result.messages].reverse().find((m) => m.emoticon);
         if (lastEmoticon) setEmoticon(lastEmoticon.emoticon);
 
-        // ★ Sequential: chirps first, then Thoth
         const neboText = lastNebo ? lastNebo.nebo : "";
         const emoText = lastEmoticon ? lastEmoticon.emoticon : emoticon;
 
@@ -402,7 +331,7 @@ function App() {
         return;
       }
 
-      // Scanner dialogue update — with chirps
+      // Scanner dialogue update
       const thothLine = result.messages.map((m) => m.thoth).join(" ");
       const lastNebo2 = [...result.messages].reverse().find((m) => m.nebo);
       const lastEmoticon2 = [...result.messages].reverse().find((m) => m.emoticon);
@@ -431,29 +360,22 @@ function App() {
     applyResult(result, trimmed);
   }
 
-  // ---- City picker handlers ----
+  // ---- State picker handler ----
   function handleStateChange(e) {
     setSelectedState(e.target.value);
-    setSelectedCity("");
   }
 
-  function handleCityChange(e) {
-    setSelectedCity(e.target.value);
-  }
-
-  function handleCitySubmit() {
-    if (!selectedCity || !selectedState) return;
-    const result = processCitySelection(selectedCity, gameState);
+  function handleStateSubmit() {
+    if (!selectedState) return;
+    const result = processStateSelection(selectedState, gameState);
     applyResult(result);
     setSelectedState("");
-    setSelectedCity("");
   }
 
   function handleSkip() {
     const result = processSkip(gameState);
     applyResult(result);
     setSelectedState("");
-    setSelectedCity("");
   }
 
   function handleKeyDown(e) {
@@ -461,7 +383,6 @@ function App() {
   }
 
   const isActive = phase !== "title" && phase !== "idle" && phase !== "scanning" && phase !== "goodbye";
-  const cities = selectedState ? getCitiesForState(selectedState) : [];
 
   // ---- Goodbye handler ----
   async function handleGoodbye() {
@@ -469,21 +390,17 @@ function App() {
     cancelNeboChirps();
     stopScanPings();
 
-    // Nebo says goodbye first
     const neboGoodbye = translateLine("Goodbye friend!");
     setLatestNebo(neboGoodbye);
     setEmoticon(EMOTICONS.happy);
 
-    // Play Nebo's goodbye chirps
     await playNeboChirps(neboGoodbye, EMOTICONS.happy);
 
-    // Thoth says goodbye
     setChatLog((prev) => [
       ...prev,
       { type: "bot", thoth: "Goodbye! The stars will always shine bright for you." },
     ]);
 
-    // Give Thoth a moment to speak, then fade
     setTimeout(() => {
       setPhase("goodbye");
     }, 3000);
@@ -509,8 +426,7 @@ function App() {
     setPhase("hub");
     setLatestNebo(translateLine("We did it!"));
     setEmoticon(EMOTICONS.happy);
-    setChatLog((prev) => [
-      ...prev,
+    setChatLog([
       { type: "bot", thoth: "Thanks for helping us map the stars! What do you want to do next?" },
     ]);
   }
@@ -531,9 +447,7 @@ function App() {
   return (
     <div className="nebo-container">
 
-      {/* ============================================================
-       * TITLE SCREEN — logo + twinkling stars + CTA
-       * ============================================================ */}
+      {/* TITLE SCREEN */}
       {phase === "title" && (
         <div className="title-screen">
           <div className="title-stars">
@@ -559,9 +473,7 @@ function App() {
         </div>
       )}
 
-      {/* ============================================================
-       * SHIP LAYERS — always rendered
-       * ============================================================ */}
+      {/* SHIP LAYERS */}
       <div className="sky-layer">
         <div className="stars">
           {Array.from({ length: 25 }).map((_, i) => (
@@ -589,7 +501,6 @@ function App() {
         alt="Nebo the alien"
         className={`nebo-layer ${
           phase === "idle"     ? "nebo-idle" :
-          phase === "naming"   ? "nebo-peeking" :
           phase === "scanning" ? "nebo-scanning" :
                                  "nebo-active"
         }`}
@@ -598,16 +509,14 @@ function App() {
 
       <img src="/assets/porthole_transp.png" alt="" className="full-layer porthole" draggable={false} />
 
-      {/* Nebo speech bubble — hidden during scanning */}
+      {/* Nebo speech bubble */}
       {isActive && latestNebo && (
         <div className="nebo-bubble">
           <p className="nebo-bubble-text">{latestNebo}</p>
         </div>
       )}
 
-      {/* ============================================================
-       * SCANNER OVERLAY
-       * ============================================================ */}
+      {/* SCANNER OVERLAY */}
       {phase === "scanning" && (
         <>
           <button className="scanner-close-button" onClick={handleCloseScanner}>
@@ -619,7 +528,7 @@ function App() {
             <h1 className="scanner-title">Star Scanner</h1>
             <p className="scanner-subtitle">
               {starChartLoading
-                ? `Scanning the skies above ${gameState.city || "us"}...`
+                ? `Scanning the skies above ${gameState.location || "us"}...`
                 : `We've located the constellation ${scannerConstellationName}!`
               }
             </p>
@@ -697,9 +606,7 @@ function App() {
         </>
       )}
 
-      {/* ============================================================
-       * THOTH PANEL — conversation view
-       * ============================================================ */}
+      {/* THOTH PANEL */}
       {phase !== "title" && phase !== "scanning" && (
         <div className="thoth-panel">
 
@@ -736,34 +643,21 @@ function App() {
 
             {phase === "picking" && (
               <div className="city-picker">
-                <div className="picker-row">
-                  <select
-                    className="picker-select"
-                    value={selectedState}
-                    onChange={handleStateChange}
-                  >
-                    <option value="">State...</option>
-                    {STATE_NAMES.map((s) => (
-                      <option key={s} value={s}>{s}</option>
-                    ))}
-                  </select>
-                  <select
-                    className="picker-select"
-                    value={selectedCity}
-                    onChange={handleCityChange}
-                    disabled={!selectedState}
-                  >
-                    <option value="">City...</option>
-                    {cities.map((c) => (
-                      <option key={c.city} value={c.city}>{c.city}</option>
-                    ))}
-                  </select>
-                </div>
+                <select
+                  className="picker-select"
+                  value={selectedState}
+                  onChange={handleStateChange}
+                >
+                  <option value="">Pick a state...</option>
+                  {STATE_NAMES.map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
                 <div className="picker-buttons">
                   <button
                     className="picker-submit"
-                    onClick={handleCitySubmit}
-                    disabled={!selectedCity}
+                    onClick={handleStateSubmit}
+                    disabled={!selectedState}
                   >
                     Launch Scanner
                   </button>
@@ -800,9 +694,7 @@ function App() {
                       type="text"
                       className="chat-input"
                       placeholder={
-                        phase === "idle" ? "Say hello..." :
-                        phase === "naming" ? "Type your name..." :
-                        "Type here..."
+                        phase === "idle" ? "Say hello..." : "Type here..."
                       }
                       value={inputValue}
                       onChange={(e) => setInputValue(e.target.value)}
@@ -821,9 +713,7 @@ function App() {
         </div>
       )}
 
-      {/* ============================================================
-       * GOODBYE — fade to black overlay
-       * ============================================================ */}
+      {/* GOODBYE */}
       {phase === "goodbye" && (
         <div className="goodbye-overlay" />
       )}

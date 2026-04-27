@@ -1,26 +1,21 @@
 /*
  * ============================================================
- * NEBO ENGINE v3 — The Fully Integrated Brain
+ * NEBO ENGINE v4 — COPPA Compliance Update
  * ============================================================
  *
- * Mars! This is the big integration build. Everything wired together:
+ * Changes from v3:
+ * - ★ Removed name entry (stage 1) — COPPA safe
+ * - ★ Stage 0 greeting → stage 1 "are you a human?" → stage 2 "can you help?"
+ * - ★ Removed kidName from state
+ * - ★ Location changed from city to state-only
+ * - ★ Updated dialogue ("Oh, are you a human?", etc.)
  *
- * NEW in v3:
- * - Star database v2: 27 verified stars, 3 per constellation
- * - Seasonal constellation picker (month-based visibility)
- * - Typo tolerance for star names (edit distance matching)
- * - Place name detection (handles "Nebraska" as a location answer)
- * - Repeat constellation tracking
- * - Loading screen facts (randomized, 2.5s cycle)
- * - Proper multi-word capitalization
- * - Nebo-speak goodbye
- *
- * STAGE MAP (unchanged):
- *   0 → Kid says hi (greeting)
- *   1 → Kid enters name
+ * STAGE MAP:
+ *   0 → Kid says hi (greeting) → "Oh, are you a human?"
+ *   1 → "Are you a human?" (yes/no) → introduces Thoth + Nebo → "Can you help?"
  *   2 → "Can you help?" (yes/no)
- *       → no → "Can you tell us where we landed?" (yes/no OR place name)
- *   3 → City picker (state/city dropdowns OR skip)
+ *       → no → "Can you tell us where we've landed?" (yes/no OR place name)
+ *   3 → State picker (dropdown OR skip)
  *   4 → Scan result displayed
  *   5 → "Scan again?" / type star name
  *
@@ -103,7 +98,6 @@ export function translateLine(text) {
 
 // ============================================================
 // Proper capitalization for multi-word names
-// "new york" → "New York", "los angeles" → "Los Angeles"
 // ============================================================
 
 function capitalizeWords(str) {
@@ -116,7 +110,6 @@ function capitalizeWords(str) {
 
 // ============================================================
 // Typo tolerance — Levenshtein edit distance
-// If the kid types "betelguse" we match to "Betelgeuse"
 // ============================================================
 
 function editDistance(a, b) {
@@ -136,25 +129,17 @@ function editDistance(a, b) {
   return dp[m][n];
 }
 
-/**
- * Find a fuzzy match in a list of names.
- * Returns the matched name or null.
- * Threshold scales with word length: short words need closer match.
- */
 export function fuzzyMatch(input, names) {
   const lower = input.toLowerCase().trim();
 
-  // Exact match first
   const exact = names.find((n) => n.toLowerCase() === lower);
   if (exact) return exact;
 
-  // Fuzzy match
   let bestMatch = null;
   let bestDist = Infinity;
 
   for (const name of names) {
     const dist = editDistance(lower, name.toLowerCase());
-    // Threshold: allow 1 error for short names, 2 for medium, 3 for long
     const threshold = name.length <= 4 ? 1 : name.length <= 7 ? 2 : 3;
     if (dist <= threshold && dist < bestDist) {
       bestDist = dist;
@@ -167,7 +152,6 @@ export function fuzzyMatch(input, names) {
 
 // ============================================================
 // Star Database v2 — 27 verified stars, 3 per constellation
-// Sources: Wikipedia, Britannica, star-facts.com
 // ============================================================
 
 const STAR_DATABASE = [
@@ -327,7 +311,6 @@ const STAR_DATABASE = [
 
 // ============================================================
 // Seasonal constellation visibility (US, ~40°N)
-// Sources: constellation-guide.com, starwalk.space
 // ============================================================
 
 const SEASONAL_CONSTELLATIONS = {
@@ -350,33 +333,20 @@ export function getVisibleConstellations() {
   return SEASONAL_CONSTELLATIONS[month] || ["umi"];
 }
 
-/**
- * Pick a constellation for a city, filtered by season.
- * Avoids repeats if seenConstellations is provided.
- */
-export function pickConstellation(city, scanCount = 0, seenConstellations = []) {
+export function pickConstellation(locationName, scanCount = 0, seenConstellations = []) {
   const visible = getVisibleConstellations();
-
-  // Filter out already-seen constellations
   const unseen = visible.filter((c) => !seenConstellations.includes(c));
-
-  // If all seen, return null (triggers "that's all for this month" message)
   if (unseen.length === 0) return null;
 
-  // Hash city + scanCount to pick deterministically
-  const str = city.toLowerCase() + String(scanCount);
+  const str = locationName.toLowerCase() + String(scanCount);
   const h = hashStr(str);
   return unseen[h % unseen.length];
 }
 
-/**
- * Get the 3 stars for a given constellation ID.
- */
 export function getStarsForConstellation(constellationId) {
   return STAR_DATABASE.filter((s) => s.constellation === constellationId);
 }
 
-// Constellation display names for the "all seen" message
 const CONSTELLATION_NAMES = {
   ori: "Orion",
   cma: "Canis Major",
@@ -395,8 +365,6 @@ export function getConstellationName(id) {
 
 // ============================================================
 // Loading screen facts
-// Sources: rewritten from NatGeo Kids space facts
-// Randomized, shown every 2.5s during star chart loading
 // ============================================================
 
 export const LOADING_FACTS = [
@@ -419,11 +387,6 @@ export function getShuffledFacts() {
     [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
   }
   return shuffled;
-}
-
-function isDaytime() {
-  const hour = new Date().getHours();
-  return hour >= 7 && hour <= 19;
 }
 
 // ============================================================
@@ -484,10 +447,10 @@ function detectIntent(input) {
 
 const FALLBACK_RESPONSES = {
   0: { nebo: "…?", thoth: "Nebo's a little confused. Try saying hello!", emoticon: EMOTICONS.neutral },
-  1: { nebo: "…?", thoth: "Nebo wants to know your name! Just type it in.", emoticon: EMOTICONS.worried },
+  1: { nebo: "…?", thoth: "Are you a human? You can say yes or no!", emoticon: EMOTICONS.neutral },
   2: { nebo: "…?", thoth: "Can you help us? You can say yes or no.", emoticon: EMOTICONS.worried },
-  "2no": { nebo: "…?", thoth: "Can you at least tell us where we landed? Yes or no?", emoticon: EMOTICONS.sad },
-  3: { nebo: "…?", thoth: "Pick your state and city so Nebo can scan the sky above you!", emoticon: EMOTICONS.worried },
+  "2no": { nebo: "…?", thoth: "Can you at least tell us where we've landed? Yes or no?", emoticon: EMOTICONS.sad },
+  3: { nebo: "…?", thoth: "Pick your state so Nebo can scan the sky above you!", emoticon: EMOTICONS.worried },
   5: { nebo: "…?", thoth: "Try typing one of the star names above, or say yes to scan again!", emoticon: EMOTICONS.happy },
 };
 
@@ -497,73 +460,66 @@ const FALLBACK_RESPONSES = {
 /*
  * state = {
  *   stage: 0,
- *   kidName: "",
- *   city: "",
+ *   location: "",        // state name (was "city")
  *   scanCount: 0,
  *   subStage: null,
- *   seenConstellations: [],   // tracks which constellations kid has seen
- *   currentConstellation: null, // current constellation ID
+ *   seenConstellations: [],
+ *   currentConstellation: null,
  * }
  */
 
 export function processMessage(input, state) {
-  const { stage, kidName, city, scanCount = 0, subStage, seenConstellations = [] } = state;
+  const { stage, location, scanCount = 0, subStage, seenConstellations = [] } = state;
   const intent = detectIntent(input);
 
-  // ---- Stage 0: waiting for greeting ----
+  // ---- Stage 0: waiting for greeting → "Are you a human?" ----
   if (stage === 0) {
     return {
       messages: [
         {
           nebo: "Uub… mee ba pfuu?",
-          thoth: "Hello? Who's there? Who are you?",
+          thoth: "Hello? Oh, are you a human?",
           emoticon: EMOTICONS.neutral,
         },
       ],
       newState: { ...state, stage: 1 },
-      expectingInput: "text",
+      expectingInput: "yesno",
     };
   }
 
-  // ---- Stage 1: name entry ----
+  // ---- Stage 1: "Are you a human?" yes/no → intro + "Can you help?" ----
   if (stage === 1) {
-    let name = input.replace(/[^a-zA-Z\s'-]/g, "").trim();
-    name = name ? name.split(/\s+/)[0] : "";
-    name = name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
-
-    if (!name) {
-      return {
-        messages: [FALLBACK_RESPONSES[1]],
-        newState: state,
-        expectingInput: "text",
-      };
-    }
-
-    if (isBad(name)) {
+    if (intent === "yes") {
       return {
         messages: [
           {
-            nebo: "Nib otz~!",
-            thoth: "Hmm, are you sure that's your real name? Try again.",
-            emoticon: EMOTICONS.sad,
+            nebo: "Pfa~!",
+            thoth: "We've never seen a human before! I'm Thoth, the ship's computer. This is Nebo. We just crashed here on Earth. Can you help?",
+            emoticon: EMOTICONS.worried,
           },
         ],
-        newState: state,
-        expectingInput: "text",
+        newState: { ...state, stage: 2 },
+        expectingInput: "yesno",
       };
     }
 
-    const neboName = toNebo(name);
+    if (intent === "no") {
+      return {
+        messages: [
+          {
+            nebo: "Ooo~!",
+            thoth: "We've never seen a human before, so no worries! I'm Thoth, the ship's computer. This is Nebo. We just crashed here on Earth. Can you help?",
+            emoticon: EMOTICONS.worried,
+          },
+        ],
+        newState: { ...state, stage: 2 },
+        expectingInput: "yesno",
+      };
+    }
 
     return {
-      messages: [
-        {
-          nebo: `${neboName}! ${neboName}~!`,
-          thoth: `Hello ${name}! I'm Thoth, the ship's computer. This is Nebo. We just crashed here on Earth. Can you help?`,
-          emoticon: EMOTICONS.worried,
-        },
-      ],
-      newState: { ...state, stage: 2, kidName: name, subStage: null },
+      messages: [FALLBACK_RESPONSES[1]],
+      newState: state,
       expectingInput: "yesno",
     };
   }
@@ -575,12 +531,12 @@ export function processMessage(input, state) {
         messages: [
           {
             nebo: "Pfa!",
-            thoth: "Oh Nebo's so glad and so am I! We're trying to launch our star scanner. Do you know what city we landed in?",
+            thoth: "Oh Nebo's so glad and so am I! We're trying to launch our star scanner. Do you know where we've landed?",
             emoticon: EMOTICONS.happy,
           },
         ],
         newState: { ...state, stage: 3 },
-        expectingInput: "city",
+        expectingInput: "state",
         showCityPicker: true,
       };
     }
@@ -590,7 +546,7 @@ export function processMessage(input, state) {
         messages: [
           {
             nebo: "Nib otz~! Plaabpfaab~!",
-            thoth: "Oh no. Can you at least tell us where we landed?",
+            thoth: "Oh no. Can you at least tell us where we've landed?",
             emoticon: EMOTICONS.sad,
           },
         ],
@@ -606,19 +562,19 @@ export function processMessage(input, state) {
     };
   }
 
-  // ---- Stage 2 (no followup): "Can you at least tell us where we landed?" ----
+  // ---- Stage 2 (no followup): "Can you at least tell us where we've landed?" ----
   if (stage === 2 && subStage === "no_followup") {
     if (intent === "yes") {
       return {
         messages: [
           {
             nebo: "Noowoo!",
-            thoth: "Thank you! What city are we in?",
+            thoth: "Thank you! Where are we?",
             emoticon: EMOTICONS.happy,
           },
         ],
         newState: { ...state, stage: 3, subStage: null },
-        expectingInput: "city",
+        expectingInput: "state",
         showCityPicker: true,
       };
     }
@@ -638,13 +594,12 @@ export function processMessage(input, state) {
       };
     }
 
-    // NEW: Check if they typed a place name instead of yes/no
+    // Check if they typed a place name instead of yes/no
     if (intent === "other") {
       const cleaned = input.replace(/[^a-zA-Z\s'-]/g, "").trim();
       if (cleaned.length >= 2 && !isBad(cleaned)) {
-        // Treat it as a location — launch scanner directly!
         const capitalized = capitalizeWords(cleaned);
-        return processCitySelection(capitalized, { ...state, subStage: null });
+        return processStateSelection(capitalized, { ...state, subStage: null });
       }
     }
 
@@ -655,49 +610,47 @@ export function processMessage(input, state) {
     };
   }
 
-  // ---- Stage 3: city picker ----
+  // ---- Stage 3: state picker ----
   if (stage === 3) {
-    const cityName = input.replace(/[^a-zA-Z\s'-]/g, "").trim();
-    if (!cityName) {
+    const locationName = input.replace(/[^a-zA-Z\s'-]/g, "").trim();
+    if (!locationName) {
       return {
         messages: [FALLBACK_RESPONSES[3]],
         newState: state,
-        expectingInput: "city",
+        expectingInput: "state",
         showCityPicker: true,
       };
     }
 
-    if (isBad(cityName)) {
+    if (isBad(locationName)) {
       return {
         messages: [
           {
             nebo: "Nib otz~!",
-            thoth: "Humans have strange city names but that doesn't seem right. Can you try again?",
+            thoth: "Humans have strange place names but that doesn't seem right. Can you try again?",
             emoticon: EMOTICONS.sad,
           },
         ],
         newState: state,
-        expectingInput: "city",
+        expectingInput: "state",
         showCityPicker: true,
       };
     }
 
-    const capitalized = capitalizeWords(cityName);
-    return processCitySelection(capitalized, state);
+    const capitalized = capitalizeWords(locationName);
+    return processStateSelection(capitalized, state);
   }
 
   // ---- Stage 5: scan results — type star name or yes/no ----
   if (stage === 5) {
     if (intent === "yes") {
-      // Check if all constellations have been seen
       const nextConstellation = pickConstellation(
-        city || "New York City",
+        location || "New York",
         scanCount + 1,
         seenConstellations
       );
 
       if (nextConstellation === null) {
-        // All constellations seen this month!
         const seenNames = seenConstellations.map((c) => getConstellationName(c)).join(", ");
         return {
           messages: [
@@ -707,7 +660,7 @@ export function processMessage(input, state) {
               emoticon: EMOTICONS.excited,
             },
           ],
-          newState: { ...state, seenConstellations: [] }, // reset so they can revisit
+          newState: { ...state, seenConstellations: [] },
           expectingInput: "text",
         };
       }
@@ -764,7 +717,6 @@ export function processMessage(input, state) {
         };
       }
 
-      // Not a star name, not yes/no — nudge them
       return {
         messages: [FALLBACK_RESPONSES[5]],
         newState: state,
@@ -805,20 +757,19 @@ export function processMessage(input, state) {
 }
 
 // ============================================================
-// City selection handler
+// State selection handler (was processCitySelection)
 // ============================================================
 
-export function processCitySelection(cityName, state) {
-
+export function processStateSelection(stateName, state) {
   return {
     messages: [
       {
         nebo: "Miinii~!",
-        thoth: `Scanning the skies above ${cityName}!`,
+        thoth: `Scanning the skies above ${stateName}!`,
         emoticon: EMOTICONS.scanning,
       },
     ],
-    newState: { ...state, stage: 4, city: cityName, subStage: null },
+    newState: { ...state, stage: 4, location: stateName, subStage: null },
     expectingInput: null,
     showScanResult: true,
   };
@@ -837,7 +788,7 @@ export function processSkip(state) {
         emoticon: EMOTICONS.scanning,
       },
     ],
-    newState: { ...state, stage: 4, city: "", subStage: null },
+    newState: { ...state, stage: 4, location: "", subStage: null },
     expectingInput: null,
     showScanResult: true,
   };
@@ -850,7 +801,6 @@ export function processSkip(state) {
 export function processScanComplete(state, stars, constellationId) {
   const starNames = stars.map((s) => s.name).join(", ");
 
-  // Track this constellation as seen
   const seen = [...(state.seenConstellations || [])];
   if (constellationId && !seen.includes(constellationId)) {
     seen.push(constellationId);
@@ -880,8 +830,7 @@ export function processScanComplete(state, stars, constellationId) {
 
 export const INITIAL_STATE = {
   stage: 0,
-  kidName: "",
-  city: "",
+  location: "",
   scanCount: 0,
   subStage: null,
   seenConstellations: [],
