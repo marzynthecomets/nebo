@@ -681,6 +681,12 @@ body {
 
 .chat-input {
   flex: 1;
+  /* min-width: 0 overrides <input>'s default min-width: auto (intrinsic
+     content size). Without this, the input refuses to shrink at narrow
+     container widths and pushes .send-button past .nebo-container's
+     overflow: hidden, clipping the arrow. Harmless on real phones since
+     the container is wide enough that it never needs to shrink. */
+  min-width: 0;
   background: transparent;
   border: 2px solid #CCB6FF;
   border-radius: 100px;
