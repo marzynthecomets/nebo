@@ -80,6 +80,14 @@ function App() {
     }
   }, [chatLog]);
 
+  // Detect iframe embedding so CSS can opt into iframe-safe sizing without
+  // affecting the standalone phone experience.
+  useEffect(() => {
+    if (window.parent !== window) {
+      document.body.classList.add("embedded");
+    }
+  }, []);
+
   // ★ THOTH SPEECH — Chat log
   useEffect(() => {
     const last = chatLog[chatLog.length - 1];
