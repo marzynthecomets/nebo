@@ -84,6 +84,7 @@ function App() {
   // affecting the standalone phone experience.
   useEffect(() => {
     if (window.parent !== window) {
+      document.documentElement.classList.add("embedded");
       document.body.classList.add("embedded");
     }
   }, []);

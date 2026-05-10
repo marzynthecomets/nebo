@@ -38,16 +38,23 @@ body {
 
 /* ============================================================
  * EMBEDDED MODE
- * App.js sets body.embedded when running inside an iframe (window.parent
- * !== window). Inside a transformed-parent iframe, 100dvh resolves to the
- * iframe's post-transform visual height, not its layout height — leaving
- * the container short and creating a black void at the bottom of the
- * frame. Use 100% of html/body/iframe instead, which tracks the iframe's
- * actual layout dimensions. Scoped to .embedded so standalone Nebo on
- * real phones is untouched (where 100dvh is correct and accounts for the
- * mobile URL bar).
+ * App.js sets html.embedded and body.embedded when running inside an
+ * iframe (window.parent !== window). Inside a transformed-parent iframe,
+ * 100dvh resolves to the post-transform visual height, not the iframe's
+ * layout height — leaving .nebo-container short and creating a black
+ * void below the chat. Use 100% of html/body instead, which tracks the
+ * iframe's actual layout dimensions. Scoped to .embedded so standalone
+ * Nebo on real phones is untouched.
+ *
+ * Body's display: flex + align-items: center is also dropped here —
+ * unnecessary once .nebo-container fills body 100%, and `height: 100%`
+ * on a flex item with `align-items: center` can compute to auto.
  * ============================================================ */
-body.embedded { height: 100%; }
+html.embedded { height: 100%; }
+body.embedded {
+  height: 100%;
+  display: block;
+}
 body.embedded .nebo-container {
   height: 100%;
   width: 100%;
@@ -55,7 +62,6 @@ body.embedded .nebo-container {
      body in both axes gives the right aspect. If embedded elsewhere with
      a different aspect, this would stretch — acceptable trade-off. */
 }
-html:has(body.embedded) { height: 100%; }
 
 /* ============================================================
  * TITLE SCREEN
