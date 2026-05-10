@@ -50,17 +50,25 @@ body {
  * unnecessary once .nebo-container fills body 100%, and `height: 100%`
  * on a flex item with `align-items: center` can compute to auto.
  * ============================================================ */
-/* Hardcoded dimensions match the portfolio's iframe size (360x640).
-   Percentage/viewport units don't work here because the iframe is inside
-   a transformed parent and the browser computes the iframe's content
-   viewport as the post-transform size (~271x482) — so 100dvh, 100%, vh,
-   etc. all resolve to ~482 instead of the layout 640, leaving a void. */
-html.embedded, body.embedded { width: 360px; height: 640px; }
+/* Position-fixed at hardcoded 360x640 to match the portfolio's iframe.
+   Reasons:
+   - Percentage/viewport units don't work here because the iframe is in
+     a transformed parent and the browser computes the iframe's content
+     viewport as the post-transform size (~271x482), not the layout 640.
+   - position: fixed detaches the container from parent flow entirely,
+     so any layout shifts inside the iframe (e.g., autoFocus scroll on
+     the chat input after submitting a message) don't move the chat
+     panel up and re-introduce the void. */
+html.embedded, body.embedded { overflow: hidden; }
 body.embedded { display: block; }
-body.embedded #root,
 body.embedded .nebo-container {
-  width: 100%;
-  height: 100%;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 360px;
+  height: 640px;
+  margin: 0;
+  max-width: none;
 }
 
 /* ============================================================
